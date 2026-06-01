@@ -132,6 +132,60 @@ async def commands(request: Request):
     ))
 
 
+def _parse_vehicle_status(sig: dict) -> dict:
+    """Parse tyres / doors / windows / temps from a fresh signal dict (live, not DB)."""
+    def f(k):
+        try: return float(sig.get(k)) if sig.get(k) is not None else None
+        except (TypeError, ValueError): return None
+    def i(k):
+        try: return int(float(sig.get(k))) if sig.get(k) is not None else None
+        except (TypeError, ValueError): return None
+    def bar(k):
+        v = f(k); return round(v / 100.0, 2) if v is not None else None
+    def is_open(k):
+        v = i(k); return None if v is None else (v != 0)
+    return {
+        "tyres": {
+            "fl": {"bar": bar("2646"), "low": i("2641") == 1},
+            "fr": {"bar": bar("2653"), "low": i("2648") == 1},
+            "rl": {"bar": bar("2660"), "low": i("2655") == 1},
+            "rr": {"bar": bar("2667"), "low": i("2662") == 1},
+        },
+        "doors": {
+            "driver":     is_open("1277"), "passenger": is_open("1278"),
+            "rear_left":  is_open("1279"), "rear_right": is_open("1280"),
+            "trunk":      is_open("1281"),
+        },
+        "windows": {
+            "fl": is_open("1693"), "fr": is_open("1694"),
+            "rl": is_open("1695"), "rr": is_open("1696"),
+            "sunshade": is_open("1724"),
+        },
+        "temps": {"battery": f("1182"), "cabin": f("1349"), "outside": f("2101")},
+    }
+
+
+@app.get("/vehicle", response_class=HTMLResponse)
+async def vehicle_page(request: Request):
+    vehicle, _ = db_reader.get_vehicle()
+    return templates.TemplateResponse(request, "vehicle.html", _ctx(
+        page="vehicle", vehicle=vehicle,
+    ))
+
+
+@app.get("/api/vehicle-status", response_class=HTMLResponse)
+async def vehicle_status_api(request: Request):
+    import asyncio
+    signals = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals)
+    vs = _parse_vehicle_status(signals) if signals else None
+    if vs:
+        # Signal 1724 on the B10 is the fixed panoramic glass (always non-zero), not the
+        # shade — use the state tracked from commands instead (None if never set).
+        shade = db_reader.get_setting("sunshade_last_state", "")
+        vs["windows"]["sunshade"] = (shade == "1") if shade != "" else None
+    return templates.TemplateResponse(request, "partials/vehicle_status.html", _ctx(vs=vs))
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     vehicle, settings = db_reader.get_vehicle()

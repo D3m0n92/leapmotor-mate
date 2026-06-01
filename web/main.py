@@ -216,8 +216,8 @@ async def poll_settings(request: Request):
     these up live on its next cycle."""
     form = await request.form()
     try:
-        parked = max(15, min(int(form.get("poll_parked", 30)), 600))
-        driving = max(5, min(int(form.get("poll_driving", 10)), 60))
+        parked = max(10, min(int(form.get("poll_parked", 30)), 600))
+        driving = max(10, min(int(form.get("poll_driving", 10)), 60))
     except (ValueError, TypeError):
         return HTMLResponse('<span style="color:#ef4444">Invalid value</span>', status_code=400)
     db_reader.set_setting("poll_parked", str(parked))

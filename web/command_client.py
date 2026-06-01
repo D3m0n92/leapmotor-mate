@@ -11,7 +11,24 @@ from leapmotor_api.client import build_signed_headers
 
 log = logging.getLogger(__name__)
 
-_CERT_DIR = os.environ.get("CERT_DIR", "certs")
+# App certificate location. The wizard writes the user-provided cert to /data/certs
+# (persistent); fall back to the image-bundled CERT_DIR for local dev. Resolved at call
+# time so certs uploaded mid-setup are picked up without a restart.
+_DATA_CERT_DIR     = os.environ.get("DATA_CERT_DIR", "/data/certs")
+_FALLBACK_CERT_DIR = os.environ.get("CERT_DIR", "certs")
+
+
+def cert_dir() -> str:
+    if (os.path.exists(os.path.join(_DATA_CERT_DIR, "app.crt"))
+            and os.path.exists(os.path.join(_DATA_CERT_DIR, "app.key"))):
+        return _DATA_CERT_DIR
+    return _FALLBACK_CERT_DIR
+
+
+def certs_present() -> bool:
+    d = cert_dir()
+    return (os.path.exists(os.path.join(d, "app.crt"))
+            and os.path.exists(os.path.join(d, "app.key")))
 
 
 def _b10_patched_get_vehicle_raw_status(self, vehicle):
@@ -61,8 +78,8 @@ def _make_client() -> LeapmotorApiClient:
         username=user,
         password=pwd,
         operation_password=pin,
-        app_cert_path=os.path.join(_CERT_DIR, "app.crt"),
-        app_key_path=os.path.join(_CERT_DIR, "app.key"),
+        app_cert_path=os.path.join(cert_dir(), "app.crt"),
+        app_key_path=os.path.join(cert_dir(), "app.key"),
         language="en-US",
         device_id=device_id,
     )
@@ -303,8 +320,8 @@ def detect_vehicle(user: str, pwd: str, pin: str) -> dict:
             username=user,
             password=pwd,
             operation_password=pin,
-            app_cert_path=os.path.join(_CERT_DIR, "app.crt"),
-            app_key_path=os.path.join(_CERT_DIR, "app.key"),
+            app_cert_path=os.path.join(cert_dir(), "app.crt"),
+            app_key_path=os.path.join(cert_dir(), "app.key"),
             language="en-US",
         )
         api.login()

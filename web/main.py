@@ -457,6 +457,52 @@ async def setup_page(request: Request):
     return templates.TemplateResponse(request, "setup.html", {})
 
 
+_DATA_CERT_DIR = os.environ.get("DATA_CERT_DIR", "/data/certs")
+
+
+@app.get("/api/setup/cert-status")
+async def cert_status_api():
+    """Whether the app certificate is already available (wizard can skip the cert step)."""
+    return JSONResponse({"present": command_client.certs_present()})
+
+
+@app.post("/api/setup/cert")
+async def setup_cert_api(request: Request):
+    """Receive the Leapmotor app certificate + key (file upload or pasted PEM) and store
+    them in the persistent /data/certs dir. The cert is the same for everyone — users get
+    it from github.com/markoceri/leapmotor-certs (documented in the wizard/README)."""
+    form = await request.form()
+
+    async def _read(field_file: str, field_text: str) -> str:
+        f = form.get(field_file)
+        if f is not None and hasattr(f, "read"):
+            return (await f.read()).decode("utf-8", "replace").strip()
+        return (form.get(field_text) or "").strip()
+
+    crt = await _read("crt_file", "crt_pem")
+    key = await _read("key_file", "key_pem")
+
+    if not crt or not key:
+        return JSONResponse({"error": "Both the certificate and the key are required."}, status_code=400)
+    if "-----BEGIN CERTIFICATE-----" not in crt:
+        return JSONResponse({"error": "The certificate file is not a valid PEM (app.crt)."}, status_code=400)
+    if "-----BEGIN" not in key or "PRIVATE KEY" not in key:
+        return JSONResponse({"error": "The key file is not a valid PEM private key (app.key)."}, status_code=400)
+
+    try:
+        os.makedirs(_DATA_CERT_DIR, exist_ok=True)
+        with open(os.path.join(_DATA_CERT_DIR, "app.crt"), "w") as fh:
+            fh.write(crt + "\n")
+        with open(os.path.join(_DATA_CERT_DIR, "app.key"), "w") as fh:
+            fh.write(key + "\n")
+    except OSError as e:
+        return JSONResponse({"error": f"Could not save the certificate: {e}"}, status_code=500)
+
+    # Drop any half-built session so the next call picks up the new cert
+    command_client._session._reset()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/setup/detect-vehicle")
 async def detect_vehicle_api(request: Request):
     import asyncio

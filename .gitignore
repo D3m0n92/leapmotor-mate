@@ -7,3 +7,12 @@ __pycache__/
 .DS_Store
 data/
 # certs/ are bundled in the image — tracked by git intentionally
+
+# App certificate (provided by user at setup — see README / markoceri/leapmotor-certs)
+certs/app.crt
+certs/app.key
+!certs/.gitkeep
+
+# Personal one-off migration scripts (not for distribution)
+scripts/import_from_ha.py
+scripts/import_ha_history.py

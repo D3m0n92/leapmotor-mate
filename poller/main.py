@@ -30,9 +30,23 @@ def load_config(db: "Database") -> dict:
         "username":  _get("LEAPMOTOR_USER", "leapmotor_user"),
         "password":  _get("LEAPMOTOR_PASS", "leapmotor_pass"),
         "pin":       _get("LEAPMOTOR_PIN",  "leapmotor_pin", ""),
-        "cert_path": os.environ.get("CERT_PATH", str(_PROJECT_ROOT / "certs" / "app.crt")),
-        "key_path":  os.environ.get("KEY_PATH",  str(_PROJECT_ROOT / "certs" / "app.key")),
+        "cert_path": _cert_path("app.crt", "CERT_PATH"),
+        "key_path":  _cert_path("app.key", "KEY_PATH"),
     }
+
+
+def _cert_path(filename: str, env_key: str) -> str:
+    """Resolve the app cert/key: explicit env override → wizard-provided /data/certs →
+    image-bundled certs/. The wizard writes user-provided certs to /data/certs (persistent),
+    so a fresh install works without any cert baked into the image."""
+    override = os.environ.get(env_key)
+    if override:
+        return override
+    data_dir = os.environ.get("DATA_CERT_DIR", "/data/certs")
+    data_path = os.path.join(data_dir, filename)
+    if os.path.exists(data_path):
+        return data_path
+    return str(_PROJECT_ROOT / "certs" / filename)
 
 
 def main():

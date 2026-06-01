@@ -35,8 +35,51 @@
     <p id="setup-subtitle" class="text-slate-400 text-sm">Configure your vehicle connection to get started</p>
   </div>
 
+  <!-- ── Step 1: App certificate ──────────────────────────────────────────── -->
+  <div id="cert-step" style="display:none">
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:14px;padding:18px 18px 20px">
+      <div id="cert-title" style="color:#f1f5f9;font-size:15px;font-weight:700;margin-bottom:6px">App certificate</div>
+      <p id="cert-desc" style="color:#94a3b8;font-size:13px;line-height:1.5;margin-bottom:10px"></p>
+      <a id="cert-link" href="https://github.com/markoceri/leapmotor-certs" target="_blank" rel="noopener"
+         style="display:inline-flex;align-items:center;gap:6px;color:#14b8a6;font-size:13px;font-weight:600;margin-bottom:16px">
+        github.com/markoceri/leapmotor-certs ↗
+      </a>
+
+      <div id="cert-error" style="display:none;background:#ef444422;border:1px solid #ef444455;border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:13px;margin-bottom:12px"></div>
+
+      <!-- Mode: file upload (default) -->
+      <div id="cert-mode-file">
+        <label class="block text-xs font-medium text-slate-400 mb-1" id="lbl-crt">app.crt (certificate)</label>
+        <input type="file" id="file-crt" accept=".crt,.pem,.cert"
+               class="w-full text-sm text-slate-300 mb-3 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand/20 file:text-brand file:cursor-pointer cursor-pointer">
+        <label class="block text-xs font-medium text-slate-400 mb-1" id="lbl-key">app.key (private key)</label>
+        <input type="file" id="file-key" accept=".key,.pem"
+               class="w-full text-sm text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand/20 file:text-brand file:cursor-pointer cursor-pointer">
+      </div>
+
+      <!-- Mode: paste PEM -->
+      <div id="cert-mode-paste" style="display:none">
+        <label class="block text-xs font-medium text-slate-400 mb-1">app.crt (PEM)</label>
+        <textarea id="paste-crt" rows="3" placeholder="-----BEGIN CERTIFICATE-----"
+                  class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-200 text-xs font-mono mb-3 focus:outline-none focus:border-brand"></textarea>
+        <label class="block text-xs font-medium text-slate-400 mb-1">app.key (PEM)</label>
+        <textarea id="paste-key" rows="3" placeholder="-----BEGIN PRIVATE KEY-----"
+                  class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-200 text-xs font-mono focus:outline-none focus:border-brand"></textarea>
+      </div>
+
+      <button type="button" onclick="toggleCertMode()" id="cert-toggle-mode"
+              class="text-xs text-slate-400 hover:text-slate-200 mt-3 cursor-pointer underline"></button>
+
+      <button type="button" onclick="saveCert()" id="btn-cert"
+              class="w-full py-3 mt-4 rounded-xl bg-brand text-white font-semibold text-sm hover:bg-teal-500 transition-all cursor-pointer">
+        <span id="cert-btn-label">Save certificate</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Account login ────────────────────────────────────────────── -->
   <!-- Form -->
-  <form method="post" action="/setup" class="space-y-4" id="setup-form"
+  <form method="post" action="/setup" class="space-y-4" id="setup-form" style="display:none"
         onsubmit="return validateSubmit()">
     <input type="hidden" name="language"  id="lang-input"  value="en">
     <input type="hidden" name="battery"   id="h-battery"   value="">
@@ -156,6 +199,14 @@ const strings = {
     submit:        "Connect & Start",
     required:      "Email, password and PIN are required.",
     noBattery:     "Please select a battery variant first.",
+    certTitle:     "Step 1 — App certificate",
+    certDesc:      "Mate needs the Leapmotor app TLS certificate (the same for everyone, not your account). Download the two files app.crt and app.key from:",
+    certBtn:       "Save certificate",
+    certSaving:    "⏳ Saving…",
+    certToPaste:   "Paste the PEM text instead",
+    certToFile:    "Upload the files instead",
+    certBoth:      "Both app.crt and app.key are required.",
+    certSaved:     "✓ Certificate saved",
   },
   it: {
     title:         "Benvenuto in LeapMotor Mate",
@@ -178,10 +229,70 @@ const strings = {
     submit:        "Connetti e avvia",
     required:      "Email, password e PIN sono obbligatori.",
     noBattery:     "Seleziona prima una variante batteria.",
+    certTitle:     "Passo 1 — Certificato app",
+    certDesc:      "Mate ha bisogno del certificato TLS dell'app Leapmotor (uguale per tutti, non del tuo account). Scarica i due file app.crt e app.key da:",
+    certBtn:       "Salva certificato",
+    certSaving:    "⏳ Salvataggio…",
+    certToPaste:   "Incolla il testo PEM invece",
+    certToFile:    "Carica i file invece",
+    certBoth:      "Servono entrambi app.crt e app.key.",
+    certSaved:     "✓ Certificato salvato",
   },
 };
 
 let currentLang = 'en';
+let certPasteMode = false;
+
+// ── Certificate step ──────────────────────────────────────────────────────────
+function toggleCertMode() {
+  certPasteMode = !certPasteMode;
+  document.getElementById('cert-mode-file').style.display  = certPasteMode ? 'none' : 'block';
+  document.getElementById('cert-mode-paste').style.display = certPasteMode ? 'block' : 'none';
+  document.getElementById('cert-toggle-mode').textContent  =
+    certPasteMode ? strings[currentLang].certToFile : strings[currentLang].certToPaste;
+}
+
+function showCertError(msg) {
+  const el = document.getElementById('cert-error');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+async function saveCert() {
+  const s = strings[currentLang];
+  showCertError('');
+  const fd = new FormData();
+  if (certPasteMode) {
+    const crt = document.getElementById('paste-crt').value.trim();
+    const key = document.getElementById('paste-key').value.trim();
+    if (!crt || !key) { showCertError(s.certBoth); return; }
+    fd.append('crt_pem', crt);
+    fd.append('key_pem', key);
+  } else {
+    const crt = document.getElementById('file-crt').files[0];
+    const key = document.getElementById('file-key').files[0];
+    if (!crt || !key) { showCertError(s.certBoth); return; }
+    fd.append('crt_file', crt);
+    fd.append('key_file', key);
+  }
+
+  const btn = document.getElementById('btn-cert');
+  document.getElementById('cert-btn-label').textContent = s.certSaving;
+  btn.disabled = true; btn.style.opacity = '0.6';
+  try {
+    const resp = await fetch('/api/setup/cert', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok || data.error) { showCertError(data.error || 'Error'); return; }
+    // Cert saved → reveal the login step
+    document.getElementById('cert-step').style.display = 'none';
+    document.getElementById('setup-form').style.display = 'block';
+  } catch (err) {
+    showCertError(err.message);
+  } finally {
+    document.getElementById('cert-btn-label').textContent = s.certBtn;
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+}
 
 // ── Language switch ───────────────────────────────────────────────────────────
 function setLang(lang) {
@@ -197,6 +308,10 @@ function setLang(lang) {
   document.getElementById('inp-pin').placeholder         = s.pinPh;
   document.getElementById('detect-label').textContent    = s.detectBtn;
   document.getElementById('submit-label').textContent    = s.submit;
+  document.getElementById('cert-title').textContent      = s.certTitle;
+  document.getElementById('cert-desc').textContent       = s.certDesc;
+  document.getElementById('cert-btn-label').textContent  = s.certBtn;
+  document.getElementById('cert-toggle-mode').textContent = certPasteMode ? s.certToFile : s.certToPaste;
 
   const active   = 'px-4 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer bg-brand/20 border-brand text-brand';
   const inactive = 'px-4 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer border-slate-600 text-slate-400 hover:border-slate-400';
@@ -400,6 +515,22 @@ function toggleVisibility(inputId, btn) {
 // ── Init ─────────────────────────────────────────────────────────────────────
 const initLang = navigator.language.startsWith('it') ? 'it' : 'en';
 setLang('{{ prefill.language if prefill else "" }}' || initLang);
+
+// Show the cert step first unless the certificate is already present.
+(async () => {
+  try {
+    const r = await fetch('/api/setup/cert-status');
+    const d = await r.json();
+    if (d.present) {
+      document.getElementById('setup-form').style.display = 'block';
+    } else {
+      document.getElementById('cert-step').style.display = 'block';
+    }
+  } catch {
+    // On error, fall back to showing the login form (cert may be bundled)
+    document.getElementById('setup-form').style.display = 'block';
+  }
+})();
 </script>
 
 </body>

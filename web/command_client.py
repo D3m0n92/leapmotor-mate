@@ -336,7 +336,9 @@ def lock():              return _session.execute(lambda api, vin: api.lock_vehic
 def unlock():            return _session.execute(lambda api, vin: api.unlock_vehicle(vin))
 def open_trunk():        return _session.execute(lambda api, vin: api.open_trunk(vin))
 def close_trunk():       return _session.execute(lambda api, vin: api.close_trunk(vin))
-def find_car():          return _session.execute(lambda api, vin: api.find_car(vin))
+# No public find_car() on the pip client — drive the registered action (cmd_id 120,
+# {"value":"true"}) through the generic remote-control entry point.
+def find_car():          return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="find_car"))
 def ac_on():             return _session.execute(lambda api, vin: api.ac_switch(vin))
 def quick_cool():        return _session.execute(lambda api, vin: api.quick_cool(vin))
 def quick_heat():        return _session.execute(lambda api, vin: api.quick_heat(vin))

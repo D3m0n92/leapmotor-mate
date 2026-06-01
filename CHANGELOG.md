@@ -3,6 +3,18 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-06-02
+
+### Added
+- **Vehicle page**: new sidebar page with live tyre pressure (per corner, with
+  low-pressure alarms), door and window open/closed states, panoramic roof and
+  battery/cabin temperatures — styled as gradient status cards.
+
+### Fixed
+- `find_car` was calling a non-existent client method; now driven through the
+  registered remote action so it reaches the car.
+- Install docs spell out the exact add-on repository URL.
+
 ## [1.0.1] — 2026-06-01
 
 ### Fixed
@@ -24,5 +36,6 @@ First public release.
 - Configurable polling (parked/driving), bilingual UI (EN/IT).
 - Home Assistant add-on and standalone Docker deployment.
 
+[1.0.2]: https://github.com/ProtossBlaster/leapmotor-mate/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ProtossBlaster/leapmotor-mate/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ProtossBlaster/leapmotor-mate/releases/tag/v1.0.0

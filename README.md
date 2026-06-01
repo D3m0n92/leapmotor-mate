@@ -6,6 +6,14 @@ Supported models: **B10 · C10 · T03** (European spec).
 
 > 🇮🇹 [Versione italiana più sotto.](#leapmotor-mate--italiano)
 
+## Screenshots
+
+| Overview | Charges |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![Charges](docs/screenshots/charges.png) |
+| **Statistics** | **Settings** |
+| ![Statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
+
 ---
 
 ## Features
@@ -111,6 +119,14 @@ If you run Home Assistant on the same network, you can trigger a temporary fast�
 **Tracciamento viaggi, registro ricariche e controllo remoto per veicoli Leapmotor** — un companion self‑hosted (un *TeslaMate* per Leapmotor). Funziona come **add‑on di Home Assistant** o come **container Docker standalone**.
 
 Modelli supportati: **B10 · C10 · T03** (spec. europea).
+
+## Schermate
+
+| Panoramica | Ricariche |
+|---|---|
+| ![Panoramica](docs/screenshots/overview.png) | ![Ricariche](docs/screenshots/charges.png) |
+| **Statistiche** | **Impostazioni** |
+| ![Statistiche](docs/screenshots/statistics.png) | ![Impostazioni](docs/screenshots/settings.png) |
 
 ## Funzionalità
 

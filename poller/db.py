@@ -269,6 +269,10 @@ class Database:
         return trip_id
 
     def add_trip_position(self, trip_id: int, data) -> None:
+        # Skip missing GPS: a (0,0) point draws the route to the Gulf of Guinea and
+        # breaks fitBounds on the map. Only record real fixes.
+        if not data.latitude or not data.longitude:
+            return
         self._conn.execute(
             """INSERT INTO trip_positions (trip_id, recorded_at, latitude, longitude, speed_kmh, soc)
                VALUES (?,?,?,?,?,?)""",

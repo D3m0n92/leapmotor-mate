@@ -381,11 +381,26 @@ def _post_command_refresh(optimistic: dict, delay: int = 3):
     db_reader.save_fresh_signals(signals)
 
 
+_CMD_COOLDOWN_S = 10     # match the HA integration's remote-action cooldown
+_last_command_at = 0.0
+
+
 @app.post("/api/command/{name}", response_class=HTMLResponse)
 async def run_command(name: str, background_tasks: BackgroundTasks):
     fn = _COMMANDS.get(name)
     if not fn:
         return HTMLResponse('<span style="color:#ef4444">Unknown command</span>', status_code=400)
+
+    # Remote-action cooldown (like the HA integration's 10s): don't fire commands too
+    # close together — the previous one may still be completing on the car.
+    global _last_command_at
+    import time
+    remaining = _CMD_COOLDOWN_S - (time.time() - _last_command_at)
+    if remaining > 0:
+        wait = int(remaining) + 1
+        label = "Attendi" if db_reader.get_language() == "it" else "Wait"
+        return HTMLResponse(f'<span style="color:#fbbf24">⏳ {label} {wait}s</span>')
+    _last_command_at = time.time()
 
     # Climate: decide direction from the real state. A tile that's on → ac_switch
     # (deactivate); a tile that's off → its own command. No optimistic overlay.

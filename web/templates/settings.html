@@ -42,6 +42,20 @@
     </div>
   </div>
 
+  <!-- Language -->
+  <div class="card">
+    <h2 class="font-semibold text-white mb-4">{{ t('setup_language') }}</h2>
+    <form hx-post="api/settings/language" hx-trigger="change">
+      <select name="language"
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-white
+                     text-sm focus:outline-none focus:border-brand cursor-pointer">
+        <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 {{ t('lang_en') }}</option>
+        <option value="it" {% if lang == 'it' %}selected{% endif %}>🇮🇹 {{ t('lang_it') }}</option>
+        <option value="fr" {% if lang == 'fr' %}selected{% endif %}>🇫🇷 {{ t('lang_fr') }}</option>
+      </select>
+    </form>
+  </div>
+
   <!-- Polling cadence -->
   <div class="card">
     <h2 class="font-semibold text-white mb-1">{{ t('polling_section') }}</h2>

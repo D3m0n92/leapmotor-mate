@@ -3,6 +3,14 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.7] — 2026-06-02
+
+### Added
+- **Language selector in Settings**. The language could previously only be chosen
+  in the initial setup wizard, so already-installed users had no way to switch.
+  Settings now has a language dropdown (🇬🇧 English / 🇮🇹 Italiano / 🇫🇷 Français);
+  changing it saves immediately and reloads the page in the new language.
+
 ## [1.0.6] — 2026-06-02
 
 ### Added

@@ -223,6 +223,16 @@ async def save_prices(request: Request):
     return HTMLResponse('<span style="color:#22c55e;font-size:13px">✓ Saved — costs recalculated</span>')
 
 
+@app.post("/api/settings/language")
+async def set_language(request: Request):
+    """Change the UI language after setup. Saved to the DB, then the page is reloaded
+    (HX-Refresh) so every server-rendered string switches to the new language."""
+    form = await request.form()
+    lang = form.get("language", "en")
+    db_reader.set_setting("language", lang if lang in ("en", "it", "fr") else "en")
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+
 # ── HTMX partial ─────────────────────────────────────────────────────────────
 
 @app.get("/api/charging-live", response_class=HTMLResponse)

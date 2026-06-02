@@ -6,44 +6,6 @@
 {# Efficiency → hex colour (for non-pill values) #}
 {% macro eff_hex(e) %}{% if e < 18 %}#4ade80{% elif e < 22 %}#facc15{% else %}#f87171{% endif %}{% endmacro %}
 
-{# Recent trip card #}
-{% macro trip_card(trip) %}
-{% set used = (trip.start_soc or 0) - (trip.end_soc or 0) %}
-<a href="trips/{{ trip.id }}" data-trip-id="{{ trip.id }}" class="trip-card">
-  <div class="trip-card-map">
-    <img loading="lazy" alt="" src="trips/{{ trip.id }}/route.svg">
-  </div>
-  <div class="trip-card-body">
-    <div class="flex items-baseline justify-between mb-1.5">
-      <span class="text-white text-sm font-semibold">
-        {{ trip.started_at[8:10] }}/{{ trip.started_at[5:7] }}
-        <span class="text-slate-400 font-normal">· {{ trip.started_at[11:16] if trip.started_at else '' }}</span>
-      </span>
-      <span class="text-slate-500 text-xs">{{ "%.0f"|format(trip.duration_min or 0) }} min</span>
-    </div>
-    <div class="flex items-end justify-between">
-      <div class="text-white text-xl font-bold leading-none">
-        {{ "%.1f"|format(trip.distance_km or 0) }}<span class="text-sm font-normal text-slate-400"> km</span>
-      </div>
-      {% if trip.efficiency_kwh_100km %}
-      <span class="eff-pill {{ eff_cls(trip.efficiency_kwh_100km) }}">
-        {{ "%.1f"|format(trip.efficiency_kwh_100km) }} <span class="unit">kWh/100</span>
-      </span>
-      {% endif %}
-    </div>
-    <div class="flex items-center gap-2 mt-2.5">
-      <div class="soc-mini flex-1" title="{{ '%.0f'|format(trip.start_soc or 0) }}% → {{ '%.0f'|format(trip.end_soc or 0) }}%">
-        <i class="soc-rem"  style="width:{{ trip.end_soc or 0 }}%"></i>
-        <i class="soc-used" style="left:{{ trip.end_soc or 0 }}%;width:{{ used if used > 0 else 0 }}%"></i>
-      </div>
-      <span class="text-slate-500 text-[11px] flex-shrink-0">
-        {{ "%.0f"|format(trip.start_soc or 0) }}→{{ "%.0f"|format(trip.end_soc or 0) }}%
-      </span>
-    </div>
-  </div>
-</a>
-{% endmacro %}
-
 {% block content %}
 <div class="mb-6">
   <h1 class="text-2xl font-bold text-white">{{ t('trips_title') }}</h1>
@@ -56,7 +18,7 @@
   <div class="hero-tile t-dist">
     <div class="hero-ico">🛣️</div>
     <div>
-      <div class="hero-val">{{ "{:,.0f}".format(summary.km).replace(',', '.') }}<span class="u">km</span></div>
+      <div class="hero-val">{{ summary.km|nice }}<span class="u">km</span></div>
       <div class="hero-label">{{ t('total_distance') }}</div>
     </div>
   </div>
@@ -72,7 +34,7 @@
     <div>
       {% if summary.avg_eff %}
       <div class="hero-val" style="color:{{ eff_hex(summary.avg_eff) }}">
-        {{ summary.avg_eff }}<span class="u">kWh/100</span>
+        {{ "%.1f"|format(summary.avg_eff) }}<span class="u">kWh/100</span>
       </div>
       {% else %}<div class="hero-val">—</div>{% endif %}
       <div class="hero-label">{{ t('avg_efficiency') }}</div>
@@ -81,29 +43,16 @@
   <div class="hero-tile t-regen">
     <div class="hero-ico">♻️</div>
     <div>
-      <div class="hero-val">{{ "%.0f"|format(summary.regen) }}<span class="u">kWh</span></div>
+      <div class="hero-val">{{ summary.regen|nice }}<span class="u">kWh</span></div>
       <div class="hero-label">{{ t('total_regen') }}</div>
     </div>
   </div>
 </div>
 {% endif %}
 
-{% if recent %}
-<!-- ── Recent trips (card grid) ─────────────────────────────────── -->
-<section class="mb-8">
-  <h2 class="text-white font-semibold mb-3">{{ t('recent_trips') }}</h2>
-  <div class="recent-grid">
-    {% for trip in recent %}{{ trip_card(trip) }}{% endfor %}
-  </div>
-</section>
-{% endif %}
-
-<!-- ── Archive (year / month / day tree) ────────────────────────── -->
+<!-- ── Trips (year / month / day tree) ──────────────────────────── -->
 {% if grouped %}
 <section>
-  <h2 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
-    <span class="text-slate-500">🗂️</span> {{ t('archive') }}
-  </h2>
   <div class="space-y-3" id="trips-tree">
   {% for year in grouped %}
 
@@ -228,7 +177,7 @@
   </div>
 </section>
 
-{% elif not recent %}
+{% else %}
 <div class="card text-center py-12 text-slate-500">
   <div class="text-5xl mb-3">🗺</div>
   <div class="text-lg">{{ t('no_trips_yet') }}</div>
@@ -244,7 +193,12 @@ const HIGHLIGHT = {{ highlight }};
 const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
 
 document.querySelectorAll('#trips-tree details').forEach(el => {
-  el.open = (el.id in saved) ? saved[el.id] : false;
+  if (el.id in saved) {
+    el.open = saved[el.id];
+  } else {
+    // Default: year + month open, day closed
+    el.open = el.id.startsWith('y-') || el.id.startsWith('m-');
+  }
 });
 
 // Save state on every toggle

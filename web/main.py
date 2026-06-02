@@ -18,6 +18,16 @@ MATE_VERSION = "1.0.9"  # bump together with the git tag + add-on config.yaml at
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+
+def _nice(x) -> str:
+    """Show a number at full precision — never round the data. Only strips
+    floating-point noise and trailing zeros (e.g. 1.77 stays 1.77, not 2)."""
+    if x is None:
+        return "—"
+    return f"{float(x):.10f}".rstrip("0").rstrip(".")
+
+templates.env.filters["nice"] = _nice
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 
@@ -82,11 +92,10 @@ async def trips_page(request: Request, highlight: int = 0):
     grouped = db_reader.get_trips_grouped()
     total   = sum(y["count"] for y in grouped)
     summary = db_reader.get_trips_summary()
-    recent  = db_reader.get_recent_trips(limit=9)
     return templates.TemplateResponse(request, "trips.html", _ctx(
         page="trips", vehicle=vehicle, grouped=grouped,
         total=total, highlight=highlight,
-        summary=summary, recent=recent,
+        summary=summary,
     ))
 
 

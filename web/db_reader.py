@@ -363,7 +363,7 @@ def get_trips_grouped() -> list[dict]:
                 "_eff_wsum": 0.0, "_eff_wdist": 0.0, "avg_eff": None}
 
     def _add(node, km, eff):
-        node["km"]    = round(node["km"] + km, 1)
+        node["km"]    = round(node["km"] + km, 2)
         node["count"] += 1
         if eff and km > 0:
             node["_eff_wsum"]  += km * eff
@@ -536,8 +536,8 @@ def get_stats_grouped() -> list[dict]:
             strftime('%Y-%m', started_at) AS month_key,
             date(started_at)              AS day_key,
             COUNT(*)                      AS trip_count,
-            ROUND(SUM(distance_km), 1)    AS total_km,
-            ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km, 0) / 100), 1) AS total_kwh,
+            ROUND(SUM(distance_km), 2)    AS total_km,
+            ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km, 0) / 100), 2) AS total_kwh,
             ROUND(
                 SUM(distance_km * COALESCE(efficiency_kwh_100km, 0) / 100) /
                 NULLIF(SUM(CASE WHEN efficiency_kwh_100km IS NOT NULL
@@ -583,8 +583,8 @@ def get_stats_grouped() -> list[dict]:
         eff = d.get("avg_efficiency")
         for node in (years[yr], years[yr]["months"][mo_key]):
             node["trip_count"]      += d["trip_count"]
-            node["total_km"]         = round(node["total_km"] + km, 1)
-            node["total_kwh"]        = round(node["total_kwh"] + (d.get("total_kwh") or 0), 1)
+            node["total_km"]         = round(node["total_km"] + km, 2)
+            node["total_kwh"]        = round(node["total_kwh"] + (d.get("total_kwh") or 0), 2)
             node["total_regen_kwh"]  = round(node["total_regen_kwh"] + (d.get("total_regen_kwh") or 0), 2)
             if eff and km > 0:
                 node["_ws"] += km * eff
@@ -625,10 +625,10 @@ def get_monthly_stats() -> list[dict]:
         """SELECT
                strftime('%Y-%m', started_at) AS month,
                COUNT(*)                       AS trip_count,
-               ROUND(SUM(distance_km), 1)     AS total_km,
+               ROUND(SUM(distance_km), 2)     AS total_km,
                ROUND(SUM(CASE WHEN efficiency_kwh_100km IS NOT NULL
-                              THEN distance_km END), 1) AS km_with_eff,
-               ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km,0) / 100), 1) AS total_kwh,
+                              THEN distance_km END), 2) AS km_with_eff,
+               ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km,0) / 100), 2) AS total_kwh,
                ROUND(AVG(efficiency_kwh_100km), 1) AS avg_efficiency
            FROM trips
            WHERE ended_at IS NOT NULL
@@ -673,7 +673,7 @@ def get_charges_grouped() -> list[dict]:
         kwh  = c.get("energy_added_kwh") or 0
         cost = c.get("cost") or 0
         for node in [years[yr], years[yr]["months"][mo], years[yr]["months"][mo]["days"][day]]:
-            node["kwh"]   = round(node["kwh"] + kwh, 1)
+            node["kwh"]   = round(node["kwh"] + kwh, 2)
             node["count"] += 1
             if c.get("cost") is not None:
                 node["cost"]     = round(node["cost"] + cost, 2)
@@ -687,19 +687,19 @@ def get_stats_summary() -> dict:
     trips = db.execute(
         """SELECT
                COUNT(*)                                                       AS trip_count,
-               ROUND(SUM(distance_km), 1)                                    AS total_km,
-               ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km,0)/100), 1) AS total_kwh_used,
+               ROUND(SUM(distance_km), 2)                                    AS total_km,
+               ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km,0)/100), 2) AS total_kwh_used,
                ROUND(SUM(duration_min), 0)                                   AS total_drive_min,
                ROUND(AVG(efficiency_kwh_100km), 1)                           AS avg_efficiency,
                ROUND(MIN(efficiency_kwh_100km), 1)                           AS best_efficiency,
-               ROUND(SUM(regen_kwh), 1)                                      AS total_regen_kwh,
+               ROUND(SUM(regen_kwh), 2)                                      AS total_regen_kwh,
                ROUND(AVG(regen_kwh), 2)                                      AS avg_regen_kwh
            FROM trips WHERE ended_at IS NOT NULL"""
     ).fetchone()
     charges = db.execute(
         """SELECT
                COUNT(*)                         AS charge_count,
-               ROUND(SUM(energy_added_kwh), 1)  AS total_kwh_charged,
+               ROUND(SUM(energy_added_kwh), 2)  AS total_kwh_charged,
                ROUND(SUM(cost), 2)              AS total_cost
            FROM charges WHERE ended_at IS NOT NULL"""
     ).fetchone()
@@ -716,11 +716,11 @@ def get_charge_stats() -> dict:
     row = db.execute(
         """SELECT
                COUNT(*)                            AS session_count,
-               ROUND(SUM(energy_added_kwh), 1)    AS total_kwh,
+               ROUND(SUM(energy_added_kwh), 2)    AS total_kwh,
                ROUND(AVG(duration_min / 60.0), 1) AS avg_duration_h,
                ROUND(SUM(cost), 2)                AS total_cost,
                ROUND(AVG(end_soc - start_soc), 1) AS avg_soc_delta,
-               ROUND(MAX(max_power_kw), 1)        AS peak_power_kw
+               ROUND(MAX(max_power_kw), 2)        AS peak_power_kw
            FROM charges
            WHERE ended_at IS NOT NULL"""
     ).fetchone()
@@ -742,6 +742,6 @@ def get_ac_dc_stats() -> dict:
         b = dc if is_dc else ac
         b["count"] += 1
         b["kwh"] += r["energy_added_kwh"] or 0
-    ac["kwh"] = round(ac["kwh"], 1)
-    dc["kwh"] = round(dc["kwh"], 1)
+    ac["kwh"] = round(ac["kwh"], 2)
+    dc["kwh"] = round(dc["kwh"], 2)
     return {"ac": ac, "dc": dc, "total": ac["count"] + dc["count"]}

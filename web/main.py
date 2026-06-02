@@ -21,11 +21,11 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def _nice(x) -> str:
-    """Show a number at full precision — never round the data. Only strips
-    floating-point noise and trailing zeros (e.g. 1.77 stays 1.77, not 2)."""
+    """Show a number with at most 2 decimals, stripping trailing zeros
+    (e.g. 1.77 → "1.77", 310.027 → "310.03", 48 → "48")."""
     if x is None:
         return "—"
-    return f"{float(x):.10f}".rstrip("0").rstrip(".")
+    return f"{float(x):.2f}".rstrip("0").rstrip(".")
 
 templates.env.filters["nice"] = _nice
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")

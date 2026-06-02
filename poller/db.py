@@ -285,14 +285,20 @@ class Database:
             "SELECT latitude, longitude FROM trip_positions WHERE trip_id = ? ORDER BY id",
             (trip_id,),
         ).fetchall()
+        trip = self._conn.execute("SELECT * FROM trips WHERE id = ?", (trip_id,)).fetchone()
 
-        distance_km = sum(
+        # Distance: the odometer counts the car's real wheel-distance, which is more
+        # accurate than summing a 10s-interval GPS track (the track cuts corners on
+        # bends and adds jitter when stationary). Use the odometer delta; fall back to
+        # the GPS track only for short hops the integer-km odometer can't resolve (Δ=0).
+        gps_km = sum(
             haversine_km(rows[i]["latitude"], rows[i]["longitude"],
                          rows[i + 1]["latitude"], rows[i + 1]["longitude"])
             for i in range(len(rows) - 1)
         )
+        odo_delta = (data.odometer_km or 0) - (trip["start_odometer_km"] or 0)
+        distance_km = odo_delta if odo_delta > 0 else gps_km
 
-        trip = self._conn.execute("SELECT * FROM trips WHERE id = ?", (trip_id,)).fetchone()
         start_soc = trip["start_soc"]
         energy_used_kwh = (start_soc - data.soc) / 100.0 * self.get_battery_capacity()
         efficiency = (energy_used_kwh / distance_km * 100) if distance_km > 0.5 else None
@@ -306,7 +312,7 @@ class Database:
                efficiency_kwh_100km=?, regen_kwh=?
                WHERE id=?""",
             (_now_iso(), data.latitude, data.longitude, data.soc,
-             data.odometer_km, round(distance_km, 3), round(duration_min, 1),
+             data.odometer_km, round(distance_km, 2), round(duration_min, 1),
              round(efficiency, 2) if efficiency else None, round(regen_kwh, 3),
              trip_id),
         )

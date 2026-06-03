@@ -278,7 +278,9 @@ def get_live() -> dict:
     pv, pu = _state_num(index.get(m.get("power", "")))
     if pv is not None:
         out["power_kw"] = pv / 1000 if pu.lower() == "w" else pv  # normalise W→kW
-    out["energy_kwh"], _ = _state_num(index.get(m.get("energy", "")))
+    ev, eu = _state_num(index.get(m.get("energy", "")))
+    if ev is not None:
+        out["energy_kwh"] = ev / 1000 if eu.lower() == "wh" else ev  # normalise Wh→kWh
     st = index.get(m.get("status", ""))
     out["status"] = st.get("state") if st else None
     out["max_current_a"], _ = _state_num(index.get(m.get("max_current", "")))
@@ -368,12 +370,18 @@ def get_history(entity_id: str, start_iso: str, end_iso: str) -> list[tuple[floa
         return []
     if status != 200 or not isinstance(body, list) or not body or not isinstance(body[0], list):
         return []
+    # With minimal_response HA sends full attributes only on the FIRST sample, so
+    # read the unit there to normalise W→kW (some wallboxes report power in watts).
+    unit = ""
+    if isinstance(body[0][0], dict):
+        unit = (body[0][0].get("attributes", {}) or {}).get("unit_of_measurement", "")
+    scale = 0.001 if unit.lower() == "w" else 1.0
     out: list[tuple[float, float]] = []
     for s in body[0]:
         ts = s.get("last_changed") or s.get("last_updated")
         ep = epoch(ts) if ts else None
         try:
-            val = float(s.get("state"))
+            val = float(s.get("state")) * scale
         except (TypeError, ValueError):
             continue  # skip unavailable/unknown
         if ep is not None:

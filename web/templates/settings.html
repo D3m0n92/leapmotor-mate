@@ -107,10 +107,10 @@
         <div class="space-y-3">
 
           {% set price_rows = [
-            ('HOME', '🏠', 'Home',      'price_home_kwh',  '#22c55e'),
-            ('AC',   '🔌', 'AC Public', 'price_ac_kwh',    '#60a5fa'),
-            ('FAST', '⚡', 'Fast DC',   'price_fast_kwh',  '#fb923c'),
-            ('HPC',  '🚀', 'HPC',       'price_hpc_kwh',   '#e879f9'),
+            ('HOME', '🏠', 'Home', 'price_home_kwh',  '#22c55e'),
+            ('AC',   '🔌', 'AC',  'price_ac_kwh',    '#60a5fa'),
+            ('FAST', '⚡', 'DC',  'price_fast_kwh',  '#fb923c'),
+            ('HPC',  '🚀', 'HPC', 'price_hpc_kwh',   '#e879f9'),
           ] %}
 
           {% for key, icon, label, setting_key, color in price_rows %}
@@ -175,6 +175,41 @@
           <button type="submit"
                   class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
             {{ t('abrp_save') }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Geocoder (Navigation address lookup) -->
+    <div class="card">
+      <h2 class="font-semibold text-white mb-1">{{ t('geocoder_section') }}</h2>
+      <p class="text-xs text-slate-400 mb-4">{{ t('geocoder_desc') }}</p>
+      <form hx-post="api/settings/geocoder" hx-target="#geocoder-feedback" hx-swap="innerHTML" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_provider_label') }}</label>
+          <select name="geocoder_provider"
+                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                         text-sm focus:outline-none focus:border-brand cursor-pointer">
+            {% set gp = settings.get('geocoder_provider', '') %}
+            <option value=""          {% if gp == '' %}selected{% endif %}>{{ t('geocoder_none') }}</option>
+            <option value="geoapify"  {% if gp == 'geoapify' %}selected{% endif %}>Geoapify ({{ t('geocoder_recommended') }})</option>
+            <option value="locationiq"{% if gp == 'locationiq' %}selected{% endif %}>LocationIQ</option>
+            <option value="tomtom"    {% if gp == 'tomtom' %}selected{% endif %}>TomTom</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_key_label') }}</label>
+          <input type="password" name="geocoder_key" value="{{ settings.get('geocoder_key', '') }}"
+                 autocomplete="off" spellcheck="false" placeholder="{{ t('geocoder_key_ph') }}"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                        text-sm font-mono focus:outline-none focus:border-brand">
+          <div class="text-[11px] text-slate-500 mt-1">{{ t('geocoder_key_hint') }}</div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div id="geocoder-feedback" class="text-xs"></div>
+          <button type="submit"
+                  class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
+            {{ t('geocoder_save') }}
           </button>
         </div>
       </form>

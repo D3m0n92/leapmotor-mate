@@ -45,11 +45,14 @@ _opt_expiry: float = 0.0
 _OPT_TTL = 30
 
 
+# Labels are intentionally language-neutral (international loanwords + universal
+# electrical acronyms) so they never need translating across UI languages.
 CHARGE_TYPES = {
-    "HOME": {"label": "Home",       "icon": "🏠", "color": "#22c55e"},
-    "AC":   {"label": "AC Public",  "icon": "🔌", "color": "#60a5fa"},
-    "FAST": {"label": "Fast DC",    "icon": "⚡", "color": "#fb923c"},
-    "HPC":  {"label": "HPC",        "icon": "🚀", "color": "#e879f9"},
+    "HOME": {"label": "Home", "icon": "🏠", "color": "#22c55e"},
+    "AC":   {"label": "AC",   "icon": "🔌", "color": "#60a5fa"},
+    "FAST": {"label": "DC",   "icon": "⚡", "color": "#fb923c"},
+    "HPC":  {"label": "HPC",  "icon": "🚀", "color": "#e879f9"},
+    "FREE": {"label": "FREE", "icon": "🆓", "color": "#a3e635"},
 }
 
 PRICE_KEYS = {
@@ -149,7 +152,12 @@ def update_charge_type(charge_id: int, location_type: str) -> dict:
         return {}
 
     energy = charge["energy_added_kwh"] or 0
-    cost   = round(energy * price, 2) if price else None
+    # FREE charging is genuinely €0 (not "unknown"); every other type with no
+    # price set stays None until a price is configured.
+    if location_type == "FREE":
+        cost = 0.0
+    else:
+        cost = round(energy * price, 2) if price else None
 
     db.execute(
         "UPDATE charges SET location_type=?, cost=? WHERE id=?",
@@ -569,9 +577,13 @@ def is_home_charge(charge_id: int) -> bool:
 
 
 def unconfirmed_charges_count() -> int:
-    """How many charges still have no type set (location_type NULL) → need confirming."""
+    """How many FINISHED charges still have no type set (location_type NULL) → need
+    confirming. In-progress charges (ended_at NULL) are excluded: they can't be
+    confirmed until they end, otherwise the banner would never clear while charging."""
     db = _get()
-    row = db.execute("SELECT COUNT(*) n FROM charges WHERE location_type IS NULL").fetchone()
+    row = db.execute(
+        "SELECT COUNT(*) n FROM charges WHERE location_type IS NULL AND ended_at IS NOT NULL"
+    ).fetchone()
     return row["n"] if row else 0
 
 

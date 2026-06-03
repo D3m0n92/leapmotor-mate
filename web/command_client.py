@@ -365,3 +365,8 @@ def close_windows():     return _session.execute(lambda api, vin: api.close_wind
 def battery_preheat():   return _session.execute(lambda api, vin: api.battery_preheat(vin))
 def open_sunshade():     return _session.execute(lambda api, vin: api.open_sunshade(vin))
 def close_sunshade():    return _session.execute(lambda api, vin: api.close_sunshade(vin))
+def send_destination(name, address, lat, lon):
+    """Push a navigation destination to the car (cmd_id 180, no PIN)."""
+    return _session.execute(lambda api, vin: api.send_destination(
+        vin, address=address, address_name=name,
+        latitude=float(lat), longitude=float(lon)))

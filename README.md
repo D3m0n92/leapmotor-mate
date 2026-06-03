@@ -28,8 +28,9 @@ Supported models: **B10 · C10 · T03** (European spec).
 - **MQTT → Home Assistant (optional)** — publish the car to Home Assistant via **MQTT Discovery** as native entities (sensors, binary sensors, GPS tracker) plus command buttons.
 - **Statistics** — driving/AC/other energy split and a 6‑week consumption trend (from the Leapmotor cloud).
 - **Remote control** — lock, windows, trunk, panoramic roof, climate, find car, battery preheat.
+- **🆕 Navigation** — search an address and **send the destination straight to the car's built‑in navigation**. Shows the car's current address too. Address lookup is keyless by default (OpenStreetMap) with an optional API key (Geoapify/LocationIQ/TomTom) for better house‑number coverage.
 - **Independent** — polls the Leapmotor cloud directly (configurable 10–30 s). No dependency on the phone app or Home Assistant; polling the cloud does **not** wake or drain the car.
-- **Multilingual UI** — English · Italiano · Français.
+- **Multilingual UI** — English · Italiano · Français · Deutsch.
 
 ## How it works
 
@@ -175,8 +176,9 @@ Modelli supportati: **B10 · C10 · T03** (spec. europea).
 - **MQTT → Home Assistant (opzionale)** — pubblica l'auto a Home Assistant via **MQTT Discovery** come entità native (sensori, binary sensor, tracker GPS) più pulsanti comando.
 - **Statistiche** — ripartizione energia guida/clima/altro e trend consumo a 6 settimane (dal cloud Leapmotor).
 - **Controllo remoto** — blocco, finestrini, bagagliaio, tetto panoramico, clima, trova auto, preriscaldo batteria.
+- **🆕 Navigazione** — cerca un indirizzo e **invia la destinazione direttamente al navigatore di bordo dell'auto**. Mostra anche l'indirizzo attuale dell'auto. La ricerca indirizzi funziona senza chiave (OpenStreetMap) con una chiave API opzionale (Geoapify/LocationIQ/TomTom) per una copertura migliore dei civici.
 - **Indipendente** — interroga direttamente il cloud Leapmotor (configurabile 10–30 s). Nessuna dipendenza dall'app o da Home Assistant; interrogare il cloud **non** sveglia né scarica l'auto.
-- **UI multilingua** — Italiano · English · Français.
+- **UI multilingua** — Italiano · English · Français · Deutsch.
 
 ## Come funziona
 

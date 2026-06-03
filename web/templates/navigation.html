@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_navigation') }} — LeapMotor Mate{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-white">{{ t('nav_title') }}</h1>
+  <p class="text-slate-400 text-sm mt-1">{{ t('nav_subtitle') }}</p>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+  <!-- Search + send -->
+  <div class="card">
+    <div class="stat-label mb-3">{{ t('nav_destination') }}</div>
+
+    <input id="nav-address" type="text" placeholder="{{ t('nav_address_ph') }}"
+           onkeydown="if(event.key==='Enter')navSearch()"
+           class="w-full px-4 py-3 mb-3 rounded-xl bg-slate-800 border border-slate-600 text-white
+                  text-sm placeholder-slate-500 focus:outline-none focus:border-brand">
+    <input id="nav-city" type="text" placeholder="{{ t('nav_city_ph') }}"
+           onkeydown="if(event.key==='Enter')navSearch()"
+           class="w-full px-4 py-3 mb-3 rounded-xl bg-slate-800 border border-slate-600 text-white
+                  text-sm placeholder-slate-500 focus:outline-none focus:border-brand">
+
+    <button onclick="navSearch()"
+            class="w-full py-3 rounded-xl font-semibold text-sm transition-all cursor-pointer mb-3"
+            style="border:1px solid #14b8a6;color:#14b8a6;background:transparent">
+      🔍 {{ t('nav_search') }}
+    </button>
+
+    <div id="nav-result" class="text-sm text-slate-300 mb-3" style="min-height:20px"></div>
+
+    <button id="nav-send-btn" onclick="navSend()" disabled
+            class="w-full py-3 rounded-xl bg-brand text-white font-semibold text-sm
+                   hover:bg-teal-500 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+      🧭 {{ t('nav_send') }}
+    </button>
+
+    <div id="nav-status" class="text-sm font-semibold mt-3" style="min-height:20px"></div>
+  </div>
+
+  <!-- Map + current position -->
+  <div class="card">
+    <div class="stat-label mb-2">{{ t('nav_current_position') }}</div>
+    <div id="nav-current" class="text-sm text-slate-300 mb-3" style="min-height:20px">…</div>
+    <div id="navmap" class="w-full rounded-lg" style="height:340px"></div>
+  </div>
+</div>
+
+<script>
+  const navStart = [{{ status.latitude if status and status.latitude else 45.4642 }},
+                    {{ status.longitude if status and status.longitude else 9.19 }}];
+  const navMap = L.map('navmap').setView(navStart, 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              { attribution: '© OpenStreetMap' }).addTo(navMap);
+
+  {% if status and status.latitude and status.longitude %}
+  L.marker(navStart).addTo(navMap).bindPopup('🚗');
+  {% endif %}
+
+  let navDest = null, navDestMarker = null;
+
+  // Current address of the car (reverse geocode), loaded once.
+  fetch('api/nav/current-address')
+    .then(r => r.text())
+    .then(txt => { document.getElementById('nav-current').textContent = txt; })
+    .catch(() => { document.getElementById('nav-current').textContent = '—'; });
+
+  async function navSearch() {
+    const a = document.getElementById('nav-address').value.trim();
+    const c = document.getElementById('nav-city').value.trim();
+    const res = document.getElementById('nav-result');
+    const sendBtn = document.getElementById('nav-send-btn');
+    document.getElementById('nav-status').innerHTML = '';
+    if (!a) { res.textContent = ''; return; }
+    res.textContent = '⏳ {{ t("nav_searching") }}';
+    sendBtn.disabled = true;
+    try {
+      const r = await fetch(`api/nav/geocode?address=${encodeURIComponent(a)}&city=${encodeURIComponent(c)}`);
+      if (!r.ok) { res.textContent = '⚠️ {{ t("nav_not_found") }}'; return; }
+      const d = await r.json();
+      navDest = d;
+      res.innerHTML = '📍 ' + d.label;
+      if (navDestMarker) navMap.removeLayer(navDestMarker);
+      navDestMarker = L.marker([d.lat, d.lon]).addTo(navMap).bindPopup(d.label).openPopup();
+      navMap.setView([d.lat, d.lon], 15);
+      sendBtn.disabled = false;
+    } catch (e) {
+      res.textContent = '⚠️ {{ t("nav_not_found") }}';
+    }
+  }
+
+  async function navSend() {
+    if (!navDest) return;
+    const st = document.getElementById('nav-status');
+    st.innerHTML = '⏳ {{ t("nav_sending") }}';
+    const fd = new FormData();
+    fd.append('lat', navDest.lat);
+    fd.append('lon', navDest.lon);
+    fd.append('address', navDest.label);
+    fd.append('name', navDest.label);
+    try {
+      const r = await fetch('api/nav/send', { method: 'POST', body: fd });
+      st.innerHTML = await r.text();
+    } catch (e) {
+      st.innerHTML = '<span style="color:#ef4444">✗</span>';
+    }
+  }
+</script>
+{% endblock %}

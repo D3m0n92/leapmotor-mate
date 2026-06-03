@@ -15,8 +15,9 @@ import db_reader
 import command_client
 import i18n
 import ha_client
+import geocode
 
-MATE_VERSION = "1.4.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.5.0"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -240,6 +241,66 @@ async def vehicle_page(request: Request):
     ))
 
 
+@app.get("/navigation", response_class=HTMLResponse)
+async def navigation_page(request: Request):
+    vehicle, _ = db_reader.get_vehicle()
+    status = db_reader.get_latest_status()
+    return templates.TemplateResponse(request, "navigation.html", _ctx(
+        page="navigation", vehicle=vehicle, status=status,
+    ))
+
+
+@app.get("/api/nav/geocode", response_class=JSONResponse)
+async def nav_geocode(address: str = "", city: str = ""):
+    import asyncio
+    provider = db_reader.get_setting("geocoder_provider", "")
+    key = db_reader.get_setting("geocoder_key", "") or None
+    try:
+        res = await asyncio.get_event_loop().run_in_executor(
+            None, geocode.geocode, address, city, provider, key)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=502)
+    if not res:
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return JSONResponse(res)
+
+
+@app.get("/api/nav/current-address", response_class=HTMLResponse)
+async def nav_current_address():
+    import asyncio
+    status = db_reader.get_latest_status() or {}
+    lat, lon = status.get("latitude"), status.get("longitude")
+    if not lat or not lon:
+        return HTMLResponse("—")
+    provider = db_reader.get_setting("geocoder_provider", "")
+    key = db_reader.get_setting("geocoder_key", "") or None
+    try:
+        addr = await asyncio.get_event_loop().run_in_executor(
+            None, geocode.reverse_geocode, lat, lon, provider, key)
+    except Exception:  # noqa: BLE001
+        addr = None
+    return HTMLResponse(addr or "—")
+
+
+@app.post("/api/nav/send", response_class=HTMLResponse)
+async def nav_send(request: Request):
+    import asyncio
+    form = await request.form()
+    try:
+        lat = float(form.get("lat"))
+        lon = float(form.get("lon"))
+    except (TypeError, ValueError):
+        return HTMLResponse('<span style="color:#ef4444">✗</span>', status_code=400)
+    address = (form.get("address") or "").strip()
+    name = (form.get("name") or address or "Destinazione")[:30]
+    ok, msg = await asyncio.get_event_loop().run_in_executor(
+        None, command_client.send_destination, name, address, lat, lon)
+    t = i18n.get_t(db_reader.get_language())
+    if ok:
+        return HTMLResponse(f'<span style="color:#22c55e">✓ {t("nav_sent")}</span>')
+    return HTMLResponse(f'<span style="color:#ef4444">✗ {msg}</span>')
+
+
 @app.get("/api/vehicle-status", response_class=HTMLResponse)
 async def vehicle_status_api(request: Request):
     import asyncio
@@ -268,7 +329,9 @@ async def settings_page(request: Request):
                 "mqtt_prefix": db_reader.get_setting("mqtt_prefix", "leapmotor"),
                 "mqtt_tls": db_reader.get_setting("mqtt_tls", "0"),
                 "mqtt_tls_insecure": db_reader.get_setting("mqtt_tls_insecure", "0"),
-                "mqtt_discovery": db_reader.get_setting("mqtt_discovery", "1")}
+                "mqtt_discovery": db_reader.get_setting("mqtt_discovery", "1"),
+                "geocoder_provider": db_reader.get_setting("geocoder_provider", ""),
+                "geocoder_key": db_reader.get_setting("geocoder_key", "")}
     return templates.TemplateResponse(request, "settings.html", _ctx(
         page="settings", vehicle=vehicle, settings=settings,
         charge_types=db_reader.CHARGE_TYPES,
@@ -590,6 +653,19 @@ async def save_abrp(request: Request):
         db_reader.set_setting("abrp_token", (form.get("abrp_token") or "").strip())
     t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("abrp_saved")}</span>')
+
+
+@app.post("/api/settings/geocoder", response_class=HTMLResponse)
+async def save_geocoder(request: Request):
+    """Store the optional TomTom API key used for better address/house-number
+    coverage on the Navigation page. Empty = keyless Photon/Nominatim."""
+    form = await request.form()
+    if "geocoder_provider" in form:
+        db_reader.set_setting("geocoder_provider", (form.get("geocoder_provider") or "").strip())
+    if "geocoder_key" in form:
+        db_reader.set_setting("geocoder_key", (form.get("geocoder_key") or "").strip())
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("geocoder_saved")}</span>')
 
 
 @app.post("/api/settings/mqtt", response_class=HTMLResponse)

@@ -3,6 +3,33 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-06-04
+
+### Added
+- **Navigation page 🧭 — send a destination to the car.** Type a street + city,
+  preview it on the map, and push it straight to the vehicle's built-in navigation
+  (no PIN). The page also shows the car's **current address** (reverse-geocoded from
+  its GPS). Fully translated (EN/IT/FR/DE).
+- **Configurable geocoder.** Address lookup works out of the box with a free
+  OpenStreetMap-based provider (no key). For better street/house-number coverage you
+  can optionally pick a provider and paste an API key in **Settings → Address lookup**
+  — **Geoapify** (recommended, free, no credit card, includes house numbers),
+  **LocationIQ** or **TomTom**. Any provider error falls back to the keyless lookup.
+- **"Free" charge type.** Mark a session as free charging (🆓) — its cost is recorded
+  as €0.00.
+
+### Changed
+- **Charge-type labels are now language-neutral** — 🏠 Home · 🔌 AC · ⚡ DC · 🚀 HPC ·
+  🆓 FREE — so they read the same in every UI language.
+
+### Fixed
+- **The "charges to confirm" banner no longer sticks while a charge is in progress.**
+  An ongoing session can't be confirmed yet, so it's excluded from the count; only
+  finished, unconfirmed charges are flagged.
+- **Wallbox power/energy units are auto-detected.** Wallboxes that report power in
+  **watts** (or energy in **Wh**) are now normalised to kW/kWh everywhere — the
+  AC-vs-DC comparison and the per-session power chart, not just the live panel.
+
 ## [1.4.0] — 2026-06-04
 
 ### Added

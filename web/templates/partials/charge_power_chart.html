@@ -8,37 +8,75 @@
   var power  = {{ power|tojson }};
   var soc    = {{ soc|tojson }};
   var labels = {{ labels|tojson }};
+  var wbpow  = {{ (wb_power or [])|tojson }};
+
+  var nmCar = {{ t('wb_series_car')|tojson }};
+  var nmWb  = {{ t('wb_series_wallbox')|tojson }};
+  var nmSoc = 'SOC %';
+
+  var hasWb = Array.isArray(wbpow) && wbpow.some(function (v) { return v != null; });
+
+  // Build series/styling, inserting the wallbox line only when we have data.
+  var series = [{ name: nmCar, type: 'area', data: power }];
+  var colors = ['#fbbf24'];          // car DC = amber
+  var fills  = ['gradient'];
+  var widths = [2];
+  if (hasWb) {
+    series.push({ name: nmWb, type: 'line', data: wbpow });
+    colors.push('#34d399');          // wallbox AC = green
+    fills.push('solid');
+    widths.push(2);
+  } else {
+    // Plain charge chart (no wallbox) keeps the SOC line; the comparison drops it for clarity.
+    series.push({ name: nmSoc, type: 'line', data: soc });
+    colors.push('#38bdf8');          // SOC = blue
+    fills.push('solid');
+    widths.push(1.5);
+  }
+
+  // Shared kW scale so car (DC) and wallbox (AC) are directly comparable.
+  var kwMax = 0;
+  power.forEach(function (v) { if (v != null && v > kwMax) kwMax = v; });
+  if (hasWb) wbpow.forEach(function (v) { if (v != null && v > kwMax) kwMax = v; });
+  kwMax = Math.max(1, Math.ceil(kwMax + 0.5));
+
+  // One y-axis per series (reliable binding); car + wallbox share the left kW
+  // scale (wallbox axis hidden), SOC sits on the right 0–100 axis.
+  var yaxis = [
+    { seriesName: nmCar, min: 0, max: kwMax, forceNiceScale: true,
+      labels: { style: { colors: '#fbbf24', fontSize: '10px' }, formatter: function (v) { return v.toFixed(2); } },
+      title: { text: 'kW', style: { color: '#fbbf24', fontSize: '10px' } } },
+  ];
+  if (hasWb) {
+    yaxis.push({ seriesName: nmWb, min: 0, max: kwMax, show: false });
+  } else {
+    yaxis.push({ opposite: true, seriesName: nmSoc, min: 0, max: 100,
+      labels: { style: { colors: '#38bdf8', fontSize: '10px' }, formatter: function (v) { return v.toFixed(0); } },
+      title: { text: 'SOC', style: { color: '#38bdf8', fontSize: '10px' } } });
+  }
+
   el._c = new ApexCharts(el, {
     chart: { type: 'line', height: 190, toolbar: { show: false }, zoom: { enabled: false },
              fontFamily: 'inherit', background: 'transparent', parentHeightOffset: 0,
              animations: { enabled: false } },
-    series: [
-      { name: 'kW',    type: 'area', data: power },
-      { name: 'SOC %', type: 'line', data: soc },
-    ],
-    stroke: { curve: 'smooth', width: [2, 1.5] },
-    colors: ['#fbbf24', '#38bdf8'],
-    fill: { type: ['gradient', 'solid'],
+    series: series,
+    stroke: { curve: 'smooth', width: widths },
+    colors: colors,
+    fill: { type: fills,
             gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] } },
     dataLabels: { enabled: false },
     markers: { size: 0 },
     xaxis: { categories: labels, tickAmount: 6, tooltip: { enabled: false },
              labels: { style: { colors: '#64748b', fontSize: '10px' }, rotate: 0, hideOverlappingLabels: true },
              axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: [
-      { seriesName: 'kW',
-        labels: { style: { colors: '#fbbf24', fontSize: '10px' }, formatter: function (v) { return v.toFixed(2); } },
-        title: { text: 'kW', style: { color: '#fbbf24', fontSize: '10px' } } },
-      { opposite: true, seriesName: 'SOC %', min: 0, max: 100,
-        labels: { style: { colors: '#38bdf8', fontSize: '10px' }, formatter: function (v) { return v.toFixed(0); } },
-        title: { text: 'SOC', style: { color: '#38bdf8', fontSize: '10px' } } },
-    ],
+    yaxis: yaxis,
     grid: { borderColor: '#1e293b', strokeDashArray: 4, padding: { left: 8, right: 8 } },
     legend: { labels: { colors: '#94a3b8' }, fontSize: '11px', markers: { width: 9, height: 9 } },
     tooltip: { theme: 'dark', shared: true, intersect: false,
                y: { formatter: function (v, o) {
                       if (v == null) return '';
-                      return o.seriesIndex === 0 ? v.toFixed(3) + ' kW' : v.toFixed(1) + ' %';
+                      var nm = o.w.config.series[o.seriesIndex].name;
+                      return nm.indexOf('SOC') >= 0 ? v.toFixed(1) + ' %' : v.toFixed(3) + ' kW';
                     } } },
   });
   el._c.render();

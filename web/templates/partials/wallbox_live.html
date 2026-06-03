@@ -1,0 +1,44 @@
+<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+  <!-- Power -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_role_power') }}</div>
+    <div class="text-2xl font-bold {% if wb.charging %}text-yellow-400{% else %}text-white{% endif %}">
+      {% if wb.power_kw is not none %}{{ wb.power_kw | nice }}<span class="text-sm text-slate-400 ml-1">kW</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+  <!-- Status -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_role_status') }}</div>
+    <div class="text-2xl font-bold text-white truncate">
+      {% if wb.status %}{{ wb.status }}{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+  <!-- Session energy -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_role_energy') }}</div>
+    <div class="text-2xl font-bold text-white">
+      {% if wb.energy_kwh is not none %}{{ wb.energy_kwh | nice }}<span class="text-sm text-slate-400 ml-1">kWh</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+  <!-- Charging speed -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_stat_speed') }}</div>
+    <div class="text-2xl font-bold text-white">
+      {% if wb.speed is not none %}{{ wb.speed | nice }}<span class="text-sm text-slate-400 ml-1">{{ wb.speed_unit }}</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+  <!-- Session cost -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_stat_cost') }}</div>
+    <div class="text-2xl font-bold text-white">
+      {% if wb.cost is not none %}<span class="text-sm text-slate-400 mr-1">€</span>{{ wb.cost | nice }}{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+  <!-- Added range -->
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_stat_distance') }}</div>
+    <div class="text-2xl font-bold text-white">
+      {% if wb.distance_km is not none %}{{ wb.distance_km | nice }}<span class="text-sm text-slate-400 ml-1">km</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+</div>

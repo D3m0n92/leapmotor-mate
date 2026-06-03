@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Wallbox — LeapMotor Mate{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center gap-3">
+  <span class="text-2xl">🔋</span>
+  <h1 class="text-2xl font-bold text-white">{{ t('wallbox_title') }}</h1>
+</div>
+
+{% if not configured %}
+<!-- Not connected / no entities mapped yet -->
+<div class="card mb-5 flex items-start gap-3" style="border-color:#854d0e;background:#1c1408">
+  <span class="text-xl">⚠️</span>
+  <div>
+    <div class="text-sm font-semibold text-amber-300">{{ t('wallbox_not_connected') }}</div>
+    <div class="text-xs text-slate-400 mt-1">{{ t('wallbox_not_connected_desc') }}</div>
+  </div>
+</div>
+{% else %}
+<!-- Live data + session stats (real data from Home Assistant) -->
+<div class="card mb-5">
+  <div class="flex items-center gap-2 mb-4">
+    <span class="text-lg">🎛️</span>
+    <h2 class="font-semibold text-white">{{ t('wallbox_live') }}</h2>
+  </div>
+  <div hx-get="api/wallbox/live" hx-trigger="load, every 10s" hx-swap="innerHTML">
+    <div class="text-sm text-slate-500">…</div>
+  </div>
+</div>
+
+<!-- Power adjustment — compact tile (loaded once; no auto-refresh so a drag isn't wiped) -->
+<div hx-get="api/wallbox/control" hx-trigger="load" hx-swap="innerHTML" class="mb-5">
+  <div class="text-sm text-slate-500">…</div>
+</div>
+
+<!-- Car-vs-wallbox: year/month/day session history; expand a session for its chart -->
+<div class="card">
+  <div class="flex items-center gap-2 mb-3">
+    <span class="text-lg">🔀</span>
+    <h2 class="font-semibold text-white">{{ t('wallbox_compare') }}</h2>
+  </div>
+  <div hx-get="api/wallbox/sessions" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-sm text-slate-500 py-2">…</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

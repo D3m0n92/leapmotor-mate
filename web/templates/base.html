@@ -164,6 +164,11 @@
       <a href="vehicle"     class="nav-link {% if page=='vehicle'     %}active{% endif %}">
         <span class="text-lg">🚗</span> {{ t('nav_vehicle') }}
       </a>
+      {% if wallbox_enabled %}
+      <a href="wallbox"     class="nav-link {% if page=='wallbox'     %}active{% endif %}">
+        <span class="text-lg">🔋</span> {{ t('nav_wallbox') }}
+      </a>
+      {% endif %}
     </nav>
 
     <!-- Settings at bottom -->

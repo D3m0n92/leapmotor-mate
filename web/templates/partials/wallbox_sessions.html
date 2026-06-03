@@ -1,0 +1,84 @@
+{% macro kwh_pair(ac, dc, eff) %}
+  <div class="flex items-center gap-3 text-xs">
+    <span class="text-emerald-400 font-medium">{% if ac %}{{ ac | nice }}<span class="text-slate-500 ml-0.5">AC</span>{% else %}<span class="text-slate-600">—</span>{% endif %}</span>
+    <span class="text-amber-400 font-medium">{% if dc %}{{ dc | nice }}<span class="text-slate-500 ml-0.5">DC</span>{% else %}<span class="text-slate-600">—</span>{% endif %}</span>
+    <span class="font-semibold {% if eff is none %}text-slate-600{% elif eff >= 88 %}text-green-400{% elif eff >= 80 %}text-yellow-400{% else %}text-red-400{% endif %}">{% if eff is not none %}{{ eff | nice }}%{% else %}—{% endif %}</span>
+  </div>
+{% endmacro %}
+
+{% if not tree %}
+<div class="text-sm text-slate-500 py-2">{{ t('no_power_data') }}</div>
+{% else %}
+<!-- Legend: what the three numbers on each row mean -->
+<div class="flex items-center flex-wrap gap-x-4 gap-y-1 text-[11px] mb-3 pb-2 border-b border-slate-800">
+  <span class="text-emerald-400 font-medium">● {{ t('wb_th_ac') }}</span>
+  <span class="text-amber-400 font-medium">● {{ t('wb_th_dc') }}</span>
+  <span class="text-slate-300 font-medium">% {{ t('wb_th_eff') }}</span>
+  <span class="text-slate-500">— {{ t('wallbox_compare_legend') }}</span>
+</div>
+<div class="space-y-2">
+{% for year in tree %}
+  <!-- YEAR -->
+  <details class="group">
+    <summary style="background:#1e293b;border:1px solid #334155;list-style:none"
+             class="flex items-center justify-between px-4 py-2.5 rounded-xl cursor-pointer select-none">
+      <div class="flex items-center gap-3">
+        <span class="group-open:rotate-90 text-slate-400" style="transition:transform .2s;display:inline-block">▶</span>
+        <span class="text-white font-bold">{{ year.label }}</span>
+      </div>
+      {{ kwh_pair(year.ac, year.dc, year.eff) }}
+    </summary>
+    <div class="ml-4 mt-2 space-y-1.5">
+    {% for month in year.months.values() %}
+      <!-- MONTH -->
+      <details class="group/month">
+        <summary style="background:#0f172a;border:1px solid #1e293b;list-style:none"
+                 class="flex items-center justify-between px-4 py-2 rounded-lg cursor-pointer select-none">
+          <div class="flex items-center gap-3">
+            <span class="group-open/month:rotate-90 text-slate-500 text-sm" style="transition:transform .2s;display:inline-block">▶</span>
+            <span class="text-slate-200 font-semibold text-sm">{{ month.label }}</span>
+          </div>
+          {{ kwh_pair(month.ac, month.dc, month.eff) }}
+        </summary>
+        <div class="ml-4 mt-1.5 space-y-1.5">
+        {% for day in month.days.values() %}
+          <!-- DAY -->
+          <details class="group/day">
+            <summary style="background:#0a1628;border:1px solid #1a2438;list-style:none"
+                     class="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer select-none">
+              <div class="flex items-center gap-2">
+                <span class="group-open/day:rotate-90 text-slate-600 text-xs" style="transition:transform .2s;display:inline-block">▶</span>
+                <span class="text-slate-300 text-sm font-medium">{{ day.label }}</span>
+              </div>
+              {{ kwh_pair(day.ac, day.dc, day.eff) }}
+            </summary>
+            <div class="ml-4 mt-2 space-y-2">
+            {% for s in day.sessions %}
+              <!-- SESSION (expand → comparison chart, lazy) -->
+              <details class="group/sess">
+                <summary hx-get="api/wallbox/compare-chart?charge_id={{ s.id }}"
+                         hx-trigger="click once" hx-target="#wbc-{{ s.id }}" hx-swap="innerHTML"
+                         style="background:#060e1a;border:1px solid #111c2e;list-style:none"
+                         class="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer select-none">
+                  <div class="flex items-center gap-2">
+                    <span class="group-open/sess:rotate-90 text-slate-600 text-xs" style="transition:transform .2s;display:inline-block">📈</span>
+                    <span class="text-slate-300 text-sm">{{ s.time }}</span>
+                  </div>
+                  {{ kwh_pair(s.ac_kwh, s.dc_kwh, s.eff) }}
+                </summary>
+                <div id="wbc-{{ s.id }}" class="mt-2">
+                  <div class="text-xs text-slate-500 py-2">…</div>
+                </div>
+              </details>
+            {% endfor %}
+            </div>
+          </details>
+        {% endfor %}
+        </div>
+      </details>
+    {% endfor %}
+    </div>
+  </details>
+{% endfor %}
+</div>
+{% endif %}

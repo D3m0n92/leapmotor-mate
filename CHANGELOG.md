@@ -3,6 +3,23 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.2] — 2026-06-04
+
+### Fixed
+- **Wrong clock times for users outside Italy.** The add-on fell back to a
+  hardcoded `Europe/Rome` timezone when `TZ` wasn't in the environment (the
+  Supervisor only sets the container's local time). Now the UI uses the system /
+  Home Assistant timezone, so trips, charges and "last seen" show your real local
+  time everywhere.
+- **Overview "State" now follows the gear, not just speed.** A stop in traffic
+  with the car in Drive used to read as "Parked"; now any gear other than P shows
+  "Driving".
+
+### Changed
+- **Panoramic roof** shows "Operate first" instead of "No data" when its position
+  is unknown — the B10 doesn't report the sunblind's position, so Mate only knows
+  it after you open/close it from the app.
+
 ## [1.6.1] — 2026-06-04
 
 ### Fixed

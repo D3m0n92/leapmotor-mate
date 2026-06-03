@@ -8,14 +8,18 @@ import os
 
 import i18n
 
-# Timestamps are stored in UTC (poller uses datetime.now(timezone.utc)). The UI
-# must show local time. TZ comes from the environment (Home Assistant passes the
-# system timezone to add-ons automatically); standalone Docker sets it in compose.
+# Timestamps are stored in UTC (poller uses datetime.now(timezone.utc)); the UI
+# must show local time. Standalone Docker sets TZ in compose → use it. As an HA
+# add-on TZ is usually NOT in the env (the Supervisor only sets the container's
+# local time via /etc/localtime), so fall back to None → astimezone(None) honours
+# the system local time = your HA timezone. No hardcoded Europe/Rome (that made
+# every non-Italian user see the wrong time).
 try:
     from zoneinfo import ZoneInfo
-    _LOCAL_TZ = ZoneInfo(os.environ.get("TZ") or "Europe/Rome")
+    _tz = os.environ.get("TZ")
+    _LOCAL_TZ = ZoneInfo(_tz) if _tz else None
 except Exception:
-    _LOCAL_TZ = timezone.utc
+    _LOCAL_TZ = None
 
 
 def _local_dt(s) -> Optional[datetime]:

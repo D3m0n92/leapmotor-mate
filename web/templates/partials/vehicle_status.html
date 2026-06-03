@@ -14,8 +14,8 @@
 {% endmacro %}
 
 {# ── Open/closed state tile: value colour carries the meaning ── #}
-{% macro state_tile(icon, label, st, open_class='text-red-400') %}
-  {% if st is none %}{{ tile(icon, label, t('no_data'), 'text-slate-500') }}
+{% macro state_tile(icon, label, st, open_class='text-red-400', none_label=None) %}
+  {% if st is none %}{{ tile(icon, label, none_label or t('no_data'), 'text-slate-500') }}
   {% elif st %}{{ tile(icon, label, t('open_state'), open_class) }}
   {% else %}{{ tile(icon, label, t('closed_state'), 'text-green-400') }}
   {% endif %}
@@ -55,7 +55,7 @@
       {{ state_tile('🪟', t('win_fr'), vs.windows.fr) }}
       {{ state_tile('🪟', t('win_rl'), vs.windows.rl) }}
       {{ state_tile('🪟', t('win_rr'), vs.windows.rr) }}
-      {{ state_tile('🌅', t('win_sunshade'), vs.windows.sunshade, open_class='text-amber-400') }}
+      {{ state_tile('🌅', t('win_sunshade'), vs.windows.sunshade, open_class='text-amber-400', none_label=t('sunshade_unknown')) }}
     </div>
   </div>
 

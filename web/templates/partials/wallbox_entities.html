@@ -1,12 +1,11 @@
-<div class="mt-5 pt-5 border-t border-slate-700">
-  <div class="text-sm font-medium text-white mb-3">{{ t('wb_entities_title') }}</div>
-  <form hx-post="api/settings/wallbox-entities" hx-target="#wb-entities-result" hx-swap="innerHTML" class="space-y-3">
+<form hx-post="api/settings/wallbox-entities" hx-target="#wb-entities-result" hx-swap="innerHTML">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     {% for role in roles %}
     <div>
       <label class="block text-xs text-slate-400 mb-1">{{ t('wb_role_' + role) }}</label>
       <select name="{{ role }}"
-              class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
-                     text-sm focus:outline-none focus:border-brand cursor-pointer">
+              class="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-white
+                     text-xs focus:outline-none focus:border-brand cursor-pointer">
         <option value="">{{ t('wb_none') }}</option>
         {% for e in entities %}
         <option value="{{ e.entity_id }}" {% if mapping.get(role) == e.entity_id %}selected{% endif %}>
@@ -16,7 +15,8 @@
       </select>
     </div>
     {% endfor %}
-    <div class="flex items-center justify-between gap-3 pt-1">
+    </div>
+    <div class="flex items-center justify-between gap-3 pt-3 mt-1">
       <div id="wb-entities-result" class="text-xs"></div>
       <button type="submit"
               class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
@@ -24,4 +24,3 @@
       </button>
     </div>
   </form>
-</div>

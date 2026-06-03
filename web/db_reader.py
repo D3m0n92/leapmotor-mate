@@ -554,6 +554,17 @@ def charges_with_power(limit: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def latest_home_charge_cost():
+    """Cost of the most recent home charge (= the wallbox) — from Mate's own charge
+    records, so the Wallbox page reuses it instead of a separate HA cost sensor."""
+    db = _get()
+    row = db.execute(
+        "SELECT cost FROM charges WHERE location_type = 'HOME' AND cost IS NOT NULL "
+        "ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+    return row["cost"] if row else None
+
+
 def get_stats_grouped() -> list[dict]:
     """Trip stats nested as year → month → day (aggregated, no individual trips)."""
     from collections import OrderedDict

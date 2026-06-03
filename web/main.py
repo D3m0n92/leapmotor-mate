@@ -325,8 +325,12 @@ async def wallbox_test(request: Request):
 async def wallbox_entities(request: Request):
     """Lazy-loaded entity picker: discovered HA entities + role selects,
     pre-filled with the saved mapping or an auto-detected best guess."""
-    entities = ha_client.list_entities(only_wallbox=True)
-    mapping = ha_client.get_mapping() or ha_client.auto_map(entities)
+    all_entities = ha_client.list_entities(only_wallbox=True)
+    # Auto-detected defaults for any role, overridden by what the user saved →
+    # new roles get a sensible pre-fill while saved choices are preserved.
+    mapping = {**ha_client.auto_map(all_entities), **ha_client.get_mapping()}
+    # Offer only the wallbox device's own sensors in the dropdowns (not every HA entity).
+    entities = ha_client.filter_device_entities(all_entities, mapping)
     return templates.TemplateResponse(request, "partials/wallbox_entities.html", _ctx(
         entities=entities, mapping=mapping, roles=ha_client.WB_ROLES,
     ))
@@ -344,9 +348,9 @@ async def save_wallbox_entities(request: Request):
 
 @app.get("/api/wallbox/live", response_class=HTMLResponse)
 async def wallbox_live(request: Request):
-    return templates.TemplateResponse(request, "partials/wallbox_live.html", _ctx(
-        wb=ha_client.get_live(),
-    ))
+    wb = ha_client.get_live()
+    wb["cost"] = db_reader.latest_home_charge_cost()  # cost comes from Mate's charges, not HA
+    return templates.TemplateResponse(request, "partials/wallbox_live.html", _ctx(wb=wb))
 
 
 def _integrate_kwh(points: list) -> float:
@@ -441,6 +445,28 @@ async def wallbox_control(request: Request):
     """Max-current control (loaded once; does NOT auto-refresh, so a drag isn't wiped)."""
     return templates.TemplateResponse(request, "partials/wallbox_control.html", _ctx(
         cfg=ha_client.get_max_current_config(), applied=None,
+    ))
+
+
+def _wallbox_totals() -> dict:
+    """Lifetime AC delivered vs DC into battery across all sessions with data."""
+    ac = dc = 0.0
+    for r in db_reader.charges_with_power():
+        e = _session_energy(db_reader.get_charge_power_curve(r["id"]))
+        if e["ac_kwh"]:
+            ac += e["ac_kwh"]
+        if e["dc_kwh"]:
+            dc += e["dc_kwh"]
+    return {"ac": round(ac, 2) if ac else None,
+            "dc": round(dc, 2) if dc else None,
+            "eff": round(100 * dc / ac, 1) if ac else None}
+
+
+@app.get("/api/wallbox/summary", response_class=HTMLResponse)
+async def wallbox_summary(request: Request):
+    """Control row: max-current tile + lifetime AC/DC/efficiency total tiles."""
+    return templates.TemplateResponse(request, "partials/wallbox_summary.html", _ctx(
+        cfg=ha_client.get_max_current_config(), applied=None, totals=_wallbox_totals(),
     ))
 
 

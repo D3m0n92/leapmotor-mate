@@ -27,18 +27,18 @@
       {% if wb.speed is not none %}{{ wb.speed | nice }}<span class="text-sm text-slate-400 ml-1">{{ wb.speed_unit }}</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
     </div>
   </div>
-  <!-- Session cost -->
+  <!-- Session cost (from Mate's home charges, not an HA sensor) -->
   <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
     <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_stat_cost') }}</div>
     <div class="text-2xl font-bold text-white">
       {% if wb.cost is not none %}<span class="text-sm text-slate-400 mr-1">€</span>{{ wb.cost | nice }}{% else %}<span class="text-slate-600">—</span>{% endif %}
     </div>
   </div>
-  <!-- Added range -->
+  <!-- Max available power -->
   <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_stat_distance') }}</div>
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_role_max_power') }}</div>
     <div class="text-2xl font-bold text-white">
-      {% if wb.distance_km is not none %}{{ wb.distance_km | nice }}<span class="text-sm text-slate-400 ml-1">km</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+      {% if wb.max_power is not none %}{{ wb.max_power | nice }}<span class="text-sm text-slate-400 ml-1">{{ wb.max_power_unit }}</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
     </div>
   </div>
 </div>

@@ -1,0 +1,34 @@
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+  {# Max-current control tile (interactive) #}
+  {% include "partials/wallbox_control.html" %}
+
+  {# Lifetime Wallbox AC #}
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_tot_ac') }}</div>
+    <div class="text-2xl font-bold text-emerald-400">
+      {% if totals.ac is not none %}{{ totals.ac | nice }}<span class="text-sm text-slate-400 ml-1">kWh</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+
+  {# Lifetime Battery DC #}
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_tot_dc') }}</div>
+    <div class="text-2xl font-bold text-amber-400">
+      {% if totals.dc is not none %}{{ totals.dc | nice }}<span class="text-sm text-slate-400 ml-1">kWh</span>{% else %}<span class="text-slate-600">—</span>{% endif %}
+    </div>
+  </div>
+
+  {# Overall efficiency #}
+  <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+    <div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">{{ t('wb_tot_eff') }}</div>
+    <div class="text-2xl font-bold
+                {% if totals.eff is none %}text-slate-600
+                {% elif totals.eff >= 88 %}text-green-400
+                {% elif totals.eff >= 80 %}text-yellow-400
+                {% else %}text-red-400{% endif %}">
+      {% if totals.eff is not none %}{{ totals.eff | nice }}<span class="text-sm text-slate-400 ml-1">%</span>{% else %}—{% endif %}
+    </div>
+  </div>
+
+</div>

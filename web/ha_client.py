@@ -143,7 +143,7 @@ def get_state(entity_id: str) -> dict | None:
 # ── Wallbox entity roles ──────────────────────────────────────────────────────
 # Each role maps to one HA entity. The picker lets the user choose; we pre-select
 # sensible defaults by scoring discovered entities against these hints.
-WB_ROLES = ("power", "energy", "status", "max_current")
+WB_ROLES = ("power", "energy", "status", "max_current", "speed", "max_power")
 
 _ROLE_HINTS = {
     # role:        (domains,        positive keywords,                              device_class)
@@ -151,6 +151,8 @@ _ROLE_HINTS = {
     "energy":      (("sensor",),    ("energia_aggiunta", "added_grid_energy", "added_energy", "energy"), "energy"),
     "status":      (("sensor",),    ("descrizione_dello_stato", "status", "stato", "state"), None),
     "max_current": (("number",),    ("corrente_di_carica_massima", "max_charging_current", "massima"), None),
+    "speed":       (("sensor",),    ("velocita_di_carica", "charging_speed", "charge_speed"), None),
+    "max_power":   (("sensor",),    ("potenza_massima_disponibile", "max_available_power", "available_power", "disponibile"), None),
 }
 # Names that almost always mean "not the wallbox's own metric" → penalise.
 _NEG = ("leapmotor", "differenza", "ups", "green", "scaricata", "deposito", "prezzo", "costo", "filtered")
@@ -190,6 +192,30 @@ def auto_map(entities: list[dict]) -> dict:
     return mapping
 
 
+def filter_device_entities(entities: list[dict], mapping: dict) -> list[dict]:
+    """Keep only entities belonging to the same device as the mapped roles, so the
+    picker offers the wallbox's own sensors — not every power/energy entity in HA.
+    Device is inferred as the longest common id-prefix of the mapped entities."""
+    ids = [v for v in mapping.values() if v]
+    if not ids:
+        return entities
+
+    def tail(eid):
+        return eid.split(".", 1)[1] if "." in eid else eid
+
+    tails = [tail(i) for i in ids]
+    prefix = tails[0]
+    for t in tails[1:]:
+        i = 0
+        while i < len(prefix) and i < len(t) and prefix[i] == t[i]:
+            i += 1
+        prefix = prefix[:i]
+    prefix = prefix.rstrip("_")
+    if len(prefix) < 4:          # couldn't infer a meaningful device → don't filter
+        return entities
+    return [e for e in entities if prefix in tail(e["entity_id"])]
+
+
 def get_mapping() -> dict:
     """Saved role→entity_id mapping (JSON in settings), or {}."""
     raw = db_reader.get_setting("wallbox_entities", "")
@@ -216,9 +242,8 @@ def _num(state: dict | None):
 
 # Session-stat entities auto-found by keyword (no formal role/mapping needed).
 _EXTRA_HINTS = {
-    "speed":    ("velocita_di_carica", "charging_speed", "charge_speed"),
-    "cost":     ("costo", "cost"),
-    "distance": ("distanza_aggiunta", "added_range", "added_distance"),
+    "speed":     ("velocita_di_carica", "charging_speed", "charge_speed"),
+    "max_power": ("potenza_massima_disponibile", "max_available_power", "available_power", "disponibile"),
 }
 
 
@@ -236,7 +261,7 @@ def get_live() -> dict:
     """Live wallbox data + session stats, from a single bulk /api/states fetch."""
     out = {"configured": False, "power_kw": None, "energy_kwh": None, "status": None,
            "max_current_a": None, "charging": False, "speed": None, "speed_unit": "",
-           "cost": None, "distance_km": None}
+           "max_power": None, "max_power_unit": ""}
     if not is_configured():
         return out
     try:
@@ -265,9 +290,12 @@ def get_live() -> dict:
                 return s
         return None
 
-    out["speed"], out["speed_unit"] = _state_num(find(_EXTRA_HINTS["speed"]))
-    out["cost"], _ = _state_num(find(_EXTRA_HINTS["cost"]))
-    out["distance_km"], _ = _state_num(find(_EXTRA_HINTS["distance"]))
+    def resolve(role):  # mapped entity wins; auto-find only as a fallback
+        eid = m.get(role)
+        return index.get(eid) if eid else find(_EXTRA_HINTS[role])
+
+    out["speed"], out["speed_unit"] = _state_num(resolve("speed"))
+    out["max_power"], out["max_power_unit"] = _state_num(resolve("max_power"))
 
     out["charging"] = out["power_kw"] is not None and out["power_kw"] > 0.05
     return out

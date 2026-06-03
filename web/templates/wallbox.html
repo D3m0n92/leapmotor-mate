@@ -28,8 +28,8 @@
   </div>
 </div>
 
-<!-- Power adjustment — compact tile (loaded once; no auto-refresh so a drag isn't wiped) -->
-<div hx-get="api/wallbox/control" hx-trigger="load" hx-swap="innerHTML" class="mb-5">
+<!-- Control + lifetime kWh comparison tiles (loaded once; the control isn't auto-refreshed) -->
+<div hx-get="api/wallbox/summary" hx-trigger="load" hx-swap="innerHTML" class="mb-5">
   <div class="text-sm text-slate-500">…</div>
 </div>
 

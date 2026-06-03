@@ -6,6 +6,7 @@ import time
 
 _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
+import abrp
 from client import LeapmotorMateClient
 from db import Database
 from recorder import Recorder
@@ -114,6 +115,11 @@ def main():
                 pass
             data = client.get_status()
             recorder.process(data)
+
+            # ABRP live telemetry (opt-in, off by default)
+            if db.get_setting("abrp_enabled") == "1":
+                abrp.send(db.get_setting("abrp_token"), data)
+
             interval = recorder.poll_interval
             # Boost window (set via POST /api/boost, e.g. an iPhone BT shortcut relayed
             # by HA when you get in the car): poll fast so we catch the trip start that

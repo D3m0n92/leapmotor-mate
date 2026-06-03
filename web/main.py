@@ -257,7 +257,9 @@ async def vehicle_status_api(request: Request):
 async def settings_page(request: Request):
     vehicle, settings = db_reader.get_vehicle()
     prices = db_reader.get_charge_prices()
-    settings = {**settings, **prices}
+    settings = {**settings, **prices,
+                "abrp_enabled": db_reader.get_setting("abrp_enabled", "0"),
+                "abrp_token": db_reader.get_setting("abrp_token", "")}
     return templates.TemplateResponse(request, "settings.html", _ctx(
         page="settings", vehicle=vehicle, settings=settings,
         charge_types=db_reader.CHARGE_TYPES,
@@ -567,6 +569,17 @@ async def save_prices(request: Request):
             except ValueError:
                 pass
     return HTMLResponse('<span style="color:#22c55e;font-size:13px">✓ Saved — costs recalculated</span>')
+
+
+@app.post("/api/settings/abrp", response_class=HTMLResponse)
+async def save_abrp(request: Request):
+    """Enable/disable ABRP live telemetry and store the user's personal token."""
+    form = await request.form()
+    db_reader.set_setting("abrp_enabled", "1" if form.get("abrp_enabled") in ("1", "on", "true") else "0")
+    if "abrp_token" in form:
+        db_reader.set_setting("abrp_token", (form.get("abrp_token") or "").strip())
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("abrp_saved")}</span>')
 
 
 @app.post("/api/settings/language")

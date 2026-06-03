@@ -1,3 +1,0 @@
-leapb10.hubcasale.it {
-    reverse_proxy leapmotor-mate:4000
-}

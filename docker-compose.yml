@@ -5,24 +5,11 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_FROM: python:3.12-slim
-    expose:
-      - "4000"
+    ports:
+      - "4000:4000"
     volumes:
       - ./data:/data
     environment:
       - DB_PATH=/data/leapmotor_mate.db
       - TZ=Europe/Rome
     restart: unless-stopped
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./caddy_data:/data
-      - ./caddy_config:/config
-    depends_on:
-      - leapmotor-mate

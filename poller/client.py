@@ -158,9 +158,17 @@ def _si(sig: dict, k: str):
 
 
 # Below this magnitude the charge current is just plugged-idle / sensor noise.
-# Lowered 3.0 → 2.0 A so low-power home charges (and the tail of a charge) are still
-# detected. NB: this is unrelated to the regen threshold (recorder.py, -3.0 A).
+# Default 2.0 A so low-power home charges (and the tail of a charge) are still
+# detected; user-tunable from Settings (the poller calls set_charge_current_min
+# each cycle). NB: this is unrelated to the regen threshold (recorder.py, -3.0 A).
 _CHARGE_CURRENT_MIN_A = 2.0
+
+
+def set_charge_current_min(amps: float) -> None:
+    """Update the charge-detection current floor (A) from the Settings value."""
+    global _CHARGE_CURRENT_MIN_A
+    if amps and amps > 0:
+        _CHARGE_CURRENT_MIN_A = amps
 
 
 def _charge_power_kw(sig: dict) -> float:

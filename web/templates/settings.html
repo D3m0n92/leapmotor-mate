@@ -91,6 +91,24 @@
       </form>
     </div>
 
+    <!-- Charge detection threshold -->
+    <div class="card">
+      <h2 class="font-semibold text-white mb-1">{{ t('charge_detect_section') }}</h2>
+      <div class="text-xs text-slate-400 mb-4">{{ t('charge_detect_desc') }}</div>
+      <form hx-post="api/settings/charge-detect" hx-trigger="change" hx-target="#cd-result" hx-swap="innerHTML">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-white">{{ t('charge_detect_label') }}</span>
+          <span class="font-bold text-brand"><span id="cd-val">{{ settings.get('charge_detect_min_a', '2.0') }}</span> A</span>
+        </div>
+        <input type="range" name="charge_detect_min_a" min="0.5" max="16" step="0.5"
+               value="{{ settings.get('charge_detect_min_a', '2.0') }}"
+               oninput="document.getElementById('cd-val').textContent=this.value"
+               class="w-full accent-brand cursor-pointer">
+        <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>0.5 A</span><span>16 A</span></div>
+        <div id="cd-result" class="text-xs mt-2"></div>
+      </form>
+    </div>
+
   </div>
 
   <!-- ── Column 2: Charge prices ─────────────────────────────────────── -->

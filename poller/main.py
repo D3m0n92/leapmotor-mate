@@ -153,12 +153,13 @@ def main():
 
     while True:
         try:
-            # Apply user-tunable poll cadence (Settings) live, each cycle
+            # Apply user-tunable poll cadence + charge-detection floor (Settings) live, each cycle
             try:
                 recorder.set_poll_intervals(
                     int(db.get_setting("poll_parked", "30") or 30),
                     int(db.get_setting("poll_driving", "10") or 10),
                 )
+                client.set_charge_current_min(float(db.get_setting("charge_detect_min_a", "2.0") or 2.0))
             except (TypeError, ValueError):
                 pass
             data = client.get_status()

@@ -36,6 +36,10 @@ _T: dict[str, dict[str, str]] = {
         "geocoder_key_hint":       "Geoapify is free with no credit card and includes house numbers — get a key at myprojects.geoapify.com. Leave the provider on “Keyless” to use OpenStreetMap.",
         "geocoder_save":           "Save",
         "geocoder_saved":          "✓ Saved",
+        # Charge detection
+        "charge_detect_section": "Charge detection",
+        "charge_detect_label":   "Minimum current",
+        "charge_detect_desc":    "Minimum charging current to count as charging. Below this, a plugged-in car is treated as idle (no session logged). Raise it to ignore very low / phantom currents, lower it to catch trickle charging.",
         # Wallbox
         "wallbox_section":       "Wallbox (Home Assistant)",
         "wallbox_enable":        "Wallbox present",
@@ -376,6 +380,10 @@ _T: dict[str, dict[str, str]] = {
         "geocoder_key_hint":       "Geoapify è gratis senza carta e include i numeri civici — crea una chiave su myprojects.geoapify.com. Lascia il provider su “Senza chiave” per usare OpenStreetMap.",
         "geocoder_save":           "Salva",
         "geocoder_saved":          "✓ Salvato",
+        # Charge detection
+        "charge_detect_section": "Rilevamento ricarica",
+        "charge_detect_label":   "Corrente minima",
+        "charge_detect_desc":    "Corrente minima per considerare l'auto in ricarica. Sotto questa soglia, l'auto collegata è considerata a riposo (nessuna sessione registrata). Alza il valore per ignorare correnti molto basse/fantasma, abbassalo per catturare ricariche deboli.",
         # Wallbox
         "wallbox_section":       "Wallbox (Home Assistant)",
         "wallbox_enable":        "Wallbox presente",
@@ -716,6 +724,10 @@ _T: dict[str, dict[str, str]] = {
         "geocoder_key_hint":       "Geoapify est gratuit sans carte et inclut les numéros — créez une clé sur myprojects.geoapify.com. Laissez le fournisseur sur « Sans clé » pour utiliser OpenStreetMap.",
         "geocoder_save":           "Enregistrer",
         "geocoder_saved":          "✓ Enregistré",
+        # Charge detection
+        "charge_detect_section": "Détection de charge",
+        "charge_detect_label":   "Courant minimal",
+        "charge_detect_desc":    "Courant de charge minimal pour considérer la voiture en charge. En dessous, une voiture branchée est considérée au repos (aucune session). Augmentez pour ignorer les courants très faibles/fantômes, baissez pour capter une charge lente.",
         # Wallbox
         "wallbox_section":       "Wallbox (Home Assistant)",
         "wallbox_enable":        "Wallbox présente",
@@ -1056,6 +1068,10 @@ _T: dict[str, dict[str, str]] = {
         "geocoder_key_hint":       "Geoapify ist kostenlos ohne Kreditkarte und enthält Hausnummern — Schlüssel auf myprojects.geoapify.com erstellen. Anbieter auf „Ohne Schlüssel“ lassen, um OpenStreetMap zu nutzen.",
         "geocoder_save":           "Speichern",
         "geocoder_saved":          "✓ Gespeichert",
+        # Charge detection
+        "charge_detect_section": "Ladeerkennung",
+        "charge_detect_label":   "Mindeststrom",
+        "charge_detect_desc":    "Mindest-Ladestrom, ab dem als Laden gilt. Darunter wird ein angestecktes Auto als inaktiv behandelt (keine Sitzung). Höher = sehr niedrige/Phantom-Ströme ignorieren, niedriger = schwaches Laden erfassen.",
         # Wallbox
         "wallbox_section":       "Wallbox (Home Assistant)",
         "wallbox_enable":        "Wallbox vorhanden",

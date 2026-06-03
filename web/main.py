@@ -17,7 +17,7 @@ import i18n
 import ha_client
 import geocode
 
-MATE_VERSION = "1.5.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.5.1"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -749,6 +749,19 @@ async def poll_settings(request: Request):
     db_reader.set_setting("poll_parked", str(parked))
     db_reader.set_setting("poll_driving", str(driving))
     return HTMLResponse(f'<span style="color:#22c55e">✓ {parked}s / {driving}s</span>')
+
+
+@app.post("/api/settings/charge-detect", response_class=HTMLResponse)
+async def charge_detect_settings(request: Request):
+    """Save the charge-detection current floor (A). Below this the plugged-in current
+    is treated as idle/noise. The poller applies it live on its next cycle."""
+    form = await request.form()
+    try:
+        amps = max(0.5, min(float(form.get("charge_detect_min_a", 2.0)), 16.0))
+    except (ValueError, TypeError):
+        return HTMLResponse('<span style="color:#ef4444">Invalid value</span>', status_code=400)
+    db_reader.set_setting("charge_detect_min_a", str(amps))
+    return HTMLResponse(f'<span style="color:#22c55e">✓ {amps:g} A</span>')
 
 
 _BOOST_DEFAULT_S = 300   # 5 min — covers the "got in the car → started driving" window

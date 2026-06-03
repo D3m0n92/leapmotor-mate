@@ -3,6 +3,15 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] — 2026-06-04
+
+### Added
+- **Configurable charge-detection threshold.** The minimum charging current that
+  counts as "charging" (below it a plugged-in car is treated as idle) is now
+  adjustable in **Settings → Charge detection** (0.5–16 A, default 2 A). Useful for
+  low-power / experimental supplies. The poller applies it live, no restart needed.
+  Thanks @hubcasale for the suggestion.
+
 ## [1.5.0] — 2026-06-04
 
 ### Added

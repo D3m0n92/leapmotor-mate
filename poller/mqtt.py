@@ -119,7 +119,7 @@ class MqttService:
         pub("charge_current", data.charge_current_a)
         pub("charge_time_remaining", data.remaining_charge_min)
         pub("battery_temp", data.battery_min_temp)
-        pub("outside_temp", data.outside_temp); pub("inside_temp", data.inside_temp)
+        pub("inside_temp", data.inside_temp)
         pub("ac_target_temp", data.climate_target_temp)
         pub("locked", data.is_locked);          pub("climate_on", data.climate_on)
         pub("plug_connected", data.plug_connected)
@@ -153,7 +153,6 @@ class MqttService:
             ("range", "Range", {"unit": "km", "icon": "mdi:map-marker-distance"}),
             ("odometer", "Odometer", {"dc": "distance", "unit": "km", "icon": "mdi:counter"}),
             ("speed", "Speed", {"dc": "speed", "unit": "km/h"}),
-            ("outside_temp", "Outside Temp", {"dc": "temperature", "unit": "°C"}),
             ("inside_temp", "Inside Temp", {"dc": "temperature", "unit": "°C"}),
             ("ac_target_temp", "AC Target", {"dc": "temperature", "unit": "°C"}),
             ("battery_temp", "Battery Temp", {"dc": "temperature", "unit": "°C"}),

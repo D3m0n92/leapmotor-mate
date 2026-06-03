@@ -213,10 +213,10 @@ def _parse_vehicle_status(sig: dict) -> dict:
         v = i(k); return None if v is None else (v != 0)
     return {
         "tyres": {
-            "fl": {"bar": bar("2646"), "low": i("2641") == 1},
+            "fl": {"bar": bar("2667"), "low": i("2641") == 1},
             "fr": {"bar": bar("2653"), "low": i("2648") == 1},
-            "rl": {"bar": bar("2660"), "low": i("2655") == 1},
-            "rr": {"bar": bar("2667"), "low": i("2662") == 1},
+            "rl": {"bar": bar("2646"), "low": i("2655") == 1},
+            "rr": {"bar": bar("2660"), "low": i("2662") == 1},
         },
         "doors": {
             "driver":     is_open("1277"), "passenger": is_open("1278"),
@@ -228,7 +228,7 @@ def _parse_vehicle_status(sig: dict) -> dict:
             "rl": is_open("1695"), "rr": is_open("1696"),
             "sunshade": is_open("1724"),
         },
-        "temps": {"battery": f("1182"), "cabin": f("1349"), "outside": f("2101")},
+        "temps": {"battery": f("1182"), "cabin": f("1349")},  # no ambient-temp signal exists
     }
 
 

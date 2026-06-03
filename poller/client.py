@@ -235,7 +235,7 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         charge_power_kw=_charge_power_kw(sig),
         latitude=float(sig.get("3725") or sig.get("2190") or 0),
         longitude=float(sig.get("3724") or sig.get("2191") or 0),
-        outside_temp=float(sig.get("2101") or 0),
+        outside_temp=None,   # no ambient-temp signal exists (2101 = driverSeatVentilation)
         inside_temp=float(sig.get("1349") or 0),
         climate_target_temp=float(sig.get("2183") or 0),
         battery_min_temp=float(sig.get("1182") or 0),
@@ -263,8 +263,10 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         window_fr_open=int(sig.get("1694") or 0) != 0,
         window_rl_open=int(sig.get("1695") or 0) != 0,
         window_rr_open=int(sig.get("1696") or 0) != 0,
-        tire_fl_bar=round(float(sig.get("2646") or 0) / 100.0, 2),
+        # Tyre signal→wheel mapping per markoceri/leapmotor-api docs (B10 slots are
+        # NOT in the obvious order): 2667=LF, 2653=RF, 2646=LR, 2660=RR.
+        tire_fl_bar=round(float(sig.get("2667") or 0) / 100.0, 2),
         tire_fr_bar=round(float(sig.get("2653") or 0) / 100.0, 2),
-        tire_rl_bar=round(float(sig.get("2660") or 0) / 100.0, 2),
-        tire_rr_bar=round(float(sig.get("2667") or 0) / 100.0, 2),
+        tire_rl_bar=round(float(sig.get("2646") or 0) / 100.0, 2),
+        tire_rr_bar=round(float(sig.get("2660") or 0) / 100.0, 2),
     )

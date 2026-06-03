@@ -8,8 +8,8 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./data:/data            # persistent DB only (code is baked into the image)
+      - ./data:/data
     environment:
       - DB_PATH=/data/leapmotor_mate.db
-      - TZ=Europe/Rome          # local time for the UI (HA passes this automatically to add-ons)
+      - TZ=Europe/Rome
     restart: unless-stopped

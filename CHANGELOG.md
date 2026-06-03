@@ -3,6 +3,14 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] — 2026-06-04
+
+### Added
+- **Responsive layout for phones and tablets.** On small screens the sidebar
+  becomes a slide-out drawer with a top bar + hamburger menu, the content reflows
+  to full width, and the maps no longer overlap the navigation. The desktop layout
+  is unchanged. Contributed by **@hubcasale** (#6) — thank you!
+
 ## [1.5.1] — 2026-06-04
 
 ### Added

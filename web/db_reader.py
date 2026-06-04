@@ -1,4 +1,5 @@
 """Read-only DB queries for the web layer."""
+import json
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -139,6 +140,61 @@ def get_charge_prices() -> dict:
     return {r["key"]: float(r["value"]) for r in rows}
 
 
+# ── Charging-cost configuration (flat 24h vs time-of-use bands) ───────────────
+# Stored in `settings`: cost_mode = 'flat'|'tou', tou_method = 'split'|'start',
+# tou_bands = JSON list of {start, end, prices:{HOME,AC,FAST,HPC}}. The flat
+# price_*_kwh values double as the "off-band" price in time-of-use mode.
+_TOU_TYPES = ["HOME", "AC", "FAST", "HPC"]
+
+
+def get_cost_config() -> dict:
+    """Pricing config for the Costs page: mode, calc method and the user bands."""
+    raw = get_setting("tou_bands", "")
+    try:
+        bands = json.loads(raw) if raw else []
+        if not isinstance(bands, list):
+            bands = []
+    except (ValueError, TypeError):
+        bands = []
+    return {
+        "mode":   get_setting("cost_mode", "flat"),
+        "method": get_setting("tou_method", "split"),
+        "bands":  bands,
+    }
+
+
+def save_cost_config(mode: str, method: str, bands: list) -> None:
+    """Persist the Costs-page config. Bands are sanitised to {start,end,prices}."""
+    mode   = mode   if mode   in ("flat", "tou")   else "flat"
+    method = method if method in ("split", "start") else "split"
+    clean = []
+    for b in bands or []:
+        if not isinstance(b, dict):
+            continue
+        start = str(b.get("start", "")).strip()
+        end   = str(b.get("end", "")).strip()
+        if not start or not end:
+            continue
+        prices, src = {}, (b.get("prices") or {})
+        for t in _TOU_TYPES:
+            try:
+                prices[t] = round(float(src.get(t)), 4)
+            except (TypeError, ValueError):
+                prices[t] = None
+        # Days of the week the band applies to (0=Mon … 6=Sun). Empty/invalid =
+        # every day, so a band always applies somewhere.
+        raw_days = b.get("days")
+        days = sorted({int(d) for d in raw_days
+                       if isinstance(d, (int, float)) and 0 <= int(d) <= 6}) \
+            if isinstance(raw_days, list) else []
+        if not days:
+            days = list(range(7))
+        clean.append({"start": start, "end": end, "days": days, "prices": prices})
+    set_setting("cost_mode", mode)
+    set_setting("tou_method", method)
+    set_setting("tou_bands", json.dumps(clean))
+
+
 def update_charge_type(charge_id: int, location_type: str) -> dict:
     """Set location_type and recalculate cost. Returns updated charge dict."""
     db = _conn_rw()
@@ -167,18 +223,11 @@ def update_charge_type(charge_id: int, location_type: str) -> dict:
 
 
 def update_charge_price(key: str, value: float) -> None:
-    db = _conn_rw()
-    db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)", (key, str(value)))
-    # Recalculate costs for all charges with a location_type
-    for ctype, pkey in PRICE_KEYS.items():
-        if pkey == key:
-            charges = db.execute(
-                "SELECT id, energy_added_kwh FROM charges WHERE location_type=?", (ctype,)
-            ).fetchall()
-            for c in charges:
-                cost = round((c["energy_added_kwh"] or 0) * value, 2)
-                db.execute("UPDATE charges SET cost=? WHERE id=?", (cost, c["id"]))
-    db.commit()
+    """Persist a base €/kWh price. Per the 'new charges only' rule, this does NOT
+    retroactively recompute already-recorded charges: a charge's cost is frozen
+    when its type is confirmed, and only charges confirmed from here on use the
+    new price. Same goes for time-of-use band/mode edits."""
+    set_setting(key, str(value))
 
 
 def upsert_vehicle(vin: str, car_type: str) -> None:

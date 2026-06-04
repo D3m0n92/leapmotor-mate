@@ -341,6 +341,21 @@ async def settings_page(request: Request):
     ))
 
 
+@app.get("/costs", response_class=HTMLResponse)
+async def costs_page(request: Request):
+    """Charging-costs page: base per-type prices + time-of-use bands."""
+    vehicle, settings = db_reader.get_vehicle()
+    prices = db_reader.get_charge_prices()
+    cfg = db_reader.get_cost_config()
+    return templates.TemplateResponse(request, "costs.html", _ctx(
+        page="costs", vehicle=vehicle,
+        settings={**settings, **prices},
+        charge_types=db_reader.CHARGE_TYPES,
+        cost_mode=cfg["mode"], tou_method=cfg["method"],
+        tou_bands_json=json.dumps(cfg["bands"]),
+    ))
+
+
 @app.get("/wallbox", response_class=HTMLResponse)
 async def wallbox_page(request: Request):
     """Wallbox page — only reachable when enabled in Settings. Data wiring to
@@ -641,7 +656,32 @@ async def save_prices(request: Request):
                 db_reader.update_charge_price(key, float(val))
             except ValueError:
                 pass
-    return HTMLResponse('<span style="color:#22c55e;font-size:13px">✓ Saved — costs recalculated</span>')
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
+
+
+@app.post("/api/costs/mode", response_class=HTMLResponse)
+async def save_cost_mode(request: Request):
+    """Switch between flat (24h) and time-of-use pricing. Bands/method untouched."""
+    form = await request.form()
+    cfg = db_reader.get_cost_config()
+    db_reader.save_cost_config(form.get("cost_mode", "flat"), cfg["method"], cfg["bands"])
+    return HTMLResponse("")
+
+
+@app.post("/api/costs/tou", response_class=HTMLResponse)
+async def save_cost_tou(request: Request):
+    """Save the calc method + the user's time bands (JSON from the band editor)."""
+    form = await request.form()
+    try:
+        bands = json.loads(form.get("bands_json", "[]") or "[]")
+    except (ValueError, TypeError):
+        bands = []
+    cfg = db_reader.get_cost_config()
+    db_reader.save_cost_config(cfg["mode"], form.get("tou_method", "split"), bands)
+    # NOTE: recomputing existing charge costs from the bands is the next step.
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
 
 
 @app.post("/api/settings/abrp", response_class=HTMLResponse)

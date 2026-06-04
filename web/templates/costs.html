@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}{{ t('costs_title') }} — LeapMotor Mate{% endblock %}
+
+{% block content %}
+{% set price_rows = [
+  ('HOME', '🏠', 'Home', 'price_home_kwh', '#22c55e'),
+  ('AC',   '🔌', 'AC',  'price_ac_kwh',   '#60a5fa'),
+  ('FAST', '⚡', 'DC',  'price_fast_kwh', '#fb923c'),
+  ('HPC',  '🚀', 'HPC', 'price_hpc_kwh',  '#e879f9'),
+] %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-white">{{ t('costs_title') }}</h1>
+  <p class="text-sm text-slate-400 mt-1">{{ t('costs_desc') }}</p>
+</div>
+
+<div class="max-w-3xl space-y-5">
+
+  <!-- Future-only notice -->
+  <div class="flex items-start gap-2 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+    <span class="flex-shrink-0">ℹ️</span>
+    <span>{{ t('costs_future_note') }}</span>
+  </div>
+
+  <!-- ── Pricing mode ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2 class="font-semibold text-white mb-3">{{ t('cost_mode') }}</h2>
+    <form hx-post="api/costs/mode" hx-trigger="change" hx-target="#mode-feedback" hx-swap="innerHTML">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="flex items-start gap-3 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
+          <input type="radio" name="cost_mode" value="flat" {% if cost_mode != 'tou' %}checked{% endif %}
+                 onchange="setMode('flat')" class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
+          <div>
+            <div class="text-sm font-semibold text-white">{{ t('cost_mode_flat') }}</div>
+            <div class="text-xs text-slate-400">{{ t('cost_mode_flat_desc') }}</div>
+          </div>
+        </label>
+        <label class="flex items-start gap-3 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
+          <input type="radio" name="cost_mode" value="tou" {% if cost_mode == 'tou' %}checked{% endif %}
+                 onchange="setMode('tou')" class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
+          <div>
+            <div class="text-sm font-semibold text-white">{{ t('cost_mode_tou') }}</div>
+            <div class="text-xs text-slate-400">{{ t('cost_mode_tou_desc') }}</div>
+          </div>
+        </label>
+      </div>
+      <div id="mode-feedback" class="text-xs mt-2"></div>
+    </form>
+  </div>
+
+  <!-- ── Base prices (also the off-band price in TOU mode) ────────────── -->
+  <div class="card">
+    <h2 class="font-semibold text-white mb-1">{{ t('cost_base_prices') }}</h2>
+    <p class="text-xs text-slate-400 mb-4">
+      {{ t('charge_prices_desc') }}
+      <span id="base-note" class="{% if cost_mode != 'tou' %}hidden{% endif %}">{{ t('cost_base_note') }}</span>
+    </p>
+
+    <form hx-post="api/settings/prices" hx-target="#prices-feedback" hx-swap="innerHTML" style="margin:0">
+      <div class="space-y-3">
+        {% for key, icon, label, setting_key, color in price_rows %}
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-slate-950 rounded-xl p-3 sm:p-4 border border-slate-900">
+          <div class="flex items-center gap-3 flex-1">
+            <span class="text-xl w-8 text-center">{{ icon }}</span>
+            <div>
+              <div class="text-sm font-semibold" style="color:{{ color }}">{{ label }}</div>
+              <div class="text-[11px] text-slate-500">
+                {% if key == 'HOME' %}{{ t('home_desc') }}
+                {% elif key == 'AC' %}{{ t('ac_desc') }}
+                {% elif key == 'FAST' %}{{ t('fast_desc') }}
+                {% else %}{{ t('hpc_desc') }}
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            <span class="text-slate-500 text-sm">€</span>
+            <input type="number" name="{{ setting_key }}"
+                   value="{{ settings.get(setting_key, '0.00') }}"
+                   step="0.01" min="0" max="9.99"
+                   class="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-sm font-semibold text-right focus:outline-none focus:border-brand">
+            <span class="text-slate-500 text-xs">/ kWh</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
+        <div id="prices-feedback" style="font-size:13px;color:#64748b"></div>
+        <button type="submit"
+                style="background:#14b8a6;color:white;border:none;border-radius:8px;
+                       padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer">
+          {{ t('save_prices') }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Time-of-use bands (visible only in TOU mode) ─────────────────── -->
+  <div id="tou-section" class="card {% if cost_mode != 'tou' %}hidden{% endif %}">
+    <h2 class="font-semibold text-white mb-1">{{ t('tou_bands_title') }}</h2>
+    <p class="text-xs text-slate-400 mb-4">{{ t('tou_bands_desc') }}</p>
+
+    <form id="tou-form" hx-post="api/costs/tou" hx-target="#tou-feedback" hx-swap="innerHTML">
+
+      <!-- calculation method -->
+      <div class="mb-5">
+        <div class="text-sm font-medium text-white mb-2">{{ t('tou_method') }}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label class="flex items-start gap-2 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
+            <input type="radio" name="tou_method" value="split" {% if tou_method != 'start' %}checked{% endif %}
+                   class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
+            <div>
+              <div class="text-sm font-semibold text-white">{{ t('tou_method_split') }}</div>
+              <div class="text-[11px] text-slate-400">{{ t('tou_method_split_desc') }}</div>
+            </div>
+          </label>
+          <label class="flex items-start gap-2 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
+            <input type="radio" name="tou_method" value="start" {% if tou_method == 'start' %}checked{% endif %}
+                   class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
+            <div>
+              <div class="text-sm font-semibold text-white">{{ t('tou_method_start') }}</div>
+              <div class="text-[11px] text-slate-400">{{ t('tou_method_start_desc') }}</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- blank-cell tip (highlighted so it isn't missed) -->
+      <div class="flex items-start gap-2.5 text-sm text-teal-100 bg-teal-500/10 border border-teal-500/30 rounded-xl px-3.5 py-3 mb-4">
+        <span class="flex-shrink-0 text-lg leading-none">💡</span>
+        <span>{{ t('band_blank_hint') }}</span>
+      </div>
+
+      <!-- bands list (one block per band) -->
+      <div id="bands-list" class="space-y-3"></div>
+      <p id="no-bands" class="text-xs text-slate-500 mt-2">{{ t('no_bands') }}</p>
+
+      <button type="button" onclick="addBand()"
+              class="mt-3 text-sm text-brand font-medium hover:text-teal-300">
+        ➕ {{ t('add_band') }}
+      </button>
+
+      <!-- off-band reminder -->
+      <div class="mt-4 flex items-center gap-2 text-xs text-slate-500 bg-slate-950 rounded-lg px-3 py-2 border border-slate-900">
+        <span class="text-slate-400">{{ t('band_default') }}</span>
+        <span>→</span>
+        <span>{{ t('cost_base_prices') }}</span>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 mt-5">
+        <div id="tou-feedback" class="text-xs"></div>
+        <button type="submit"
+                class="bg-brand text-white text-sm font-semibold rounded-lg px-5 py-2 flex-shrink-0">
+          {{ t('costs_save') }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  const TOU_TYPES = ["HOME", "AC", "FAST", "HPC"];
+  const TYPE_META = {
+    HOME: { icon: "🏠", label: "Home", color: "#22c55e" },
+    AC:   { icon: "🔌", label: "AC",   color: "#60a5fa" },
+    FAST: { icon: "⚡", label: "DC",   color: "#fb923c" },
+    HPC:  { icon: "🚀", label: "HPC",  color: "#e879f9" }
+  };
+  const DAY_LABELS = ["{{ t('dow_mon') }}", "{{ t('dow_tue') }}", "{{ t('dow_wed') }}",
+                      "{{ t('dow_thu') }}", "{{ t('dow_fri') }}", "{{ t('dow_sat') }}",
+                      "{{ t('dow_sun') }}"];
+  const PRESETS = [
+    ["{{ t('tou_preset_all') }}",     [0, 1, 2, 3, 4, 5, 6]],
+    ["{{ t('tou_preset_week') }}",    [0, 1, 2, 3, 4]],
+    ["{{ t('tou_preset_weekend') }}", [5, 6]]
+  ];
+  const BANDS = {{ tou_bands_json|safe }};
+  // Base (off-band) price per type — shown as a cell's placeholder, so it's clear
+  // that leaving a band price blank falls back to this price.
+  const BASE_PRICES = {
+    HOME: "{{ settings.get('price_home_kwh', '') }}",
+    AC:   "{{ settings.get('price_ac_kwh', '') }}",
+    FAST: "{{ settings.get('price_fast_kwh', '') }}",
+    HPC:  "{{ settings.get('price_hpc_kwh', '') }}"
+  };
+
+  function setMode(mode) {
+    document.getElementById('tou-section').classList.toggle('hidden', mode !== 'tou');
+    const note = document.getElementById('base-note');
+    if (note) note.classList.toggle('hidden', mode !== 'tou');
+  }
+
+  function mkInput(type, value, extraCls, attrs) {
+    const i = document.createElement('input');
+    i.type = type;
+    if (value !== undefined && value !== null) i.value = value;
+    i.className = "bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white " +
+                  "text-sm focus:outline-none focus:border-brand " + (extraCls || "");
+    Object.assign(i, attrs || {});
+    return i;
+  }
+
+  function styleDay(btn) {
+    const on = btn.dataset.on === "1";
+    btn.className = "day-toggle px-2 py-1 rounded-md text-xs font-medium border transition " +
+      (on ? "bg-brand text-white border-brand"
+          : "bg-slate-800 text-slate-400 border-slate-700");
+  }
+
+  function setDays(wrap, list) {
+    wrap.querySelectorAll('.day-toggle').forEach((b) => {
+      b.dataset.on = list.includes(parseInt(b.dataset.day)) ? "1" : "0";
+      styleDay(b);
+    });
+  }
+
+  function buildBlock(band) {
+    band = band || {};
+    const prices = band.prices || {};
+    const days = Array.isArray(band.days) ? band.days : [0, 1, 2, 3, 4, 5, 6];
+
+    const block = document.createElement('div');
+    block.className = "band-block bg-slate-950 rounded-xl p-3 border border-slate-800 space-y-3";
+
+    // ── Row 1: time range · day toggles · presets · delete ──
+    const row1 = document.createElement('div');
+    row1.className = "flex flex-wrap items-center gap-x-3 gap-y-2";
+
+    const timeWrap = document.createElement('div');
+    timeWrap.className = "flex items-center gap-2";
+    const arrow = document.createElement('span');
+    arrow.className = "text-slate-500"; arrow.textContent = "→";
+    timeWrap.append(mkInput('time', band.start || "", "band-start w-28"), arrow,
+                    mkInput('time', band.end || "", "band-end w-28"));
+
+    const daysWrap = document.createElement('div');
+    daysWrap.className = "flex flex-wrap gap-1 band-days";
+    for (let d = 0; d < 7; d++) {
+      const b = document.createElement('button');
+      b.type = "button"; b.dataset.day = d; b.textContent = DAY_LABELS[d];
+      b.dataset.on = days.includes(d) ? "1" : "0";
+      styleDay(b);
+      b.onclick = () => { b.dataset.on = b.dataset.on === "1" ? "0" : "1"; styleDay(b); };
+      daysWrap.appendChild(b);
+    }
+
+    const presetWrap = document.createElement('div');
+    presetWrap.className = "flex gap-1";
+    PRESETS.forEach(([label, list]) => {
+      const p = document.createElement('button');
+      p.type = "button"; p.textContent = label;
+      p.className = "px-2 py-1 rounded-md text-[10px] text-slate-400 bg-slate-800/60 hover:text-white";
+      p.onclick = () => setDays(daysWrap, list);
+      presetWrap.appendChild(p);
+    });
+
+    const del = document.createElement('button');
+    del.type = "button"; del.textContent = "🗑";
+    del.className = "band-del text-slate-500 hover:text-red-400 px-2 text-base ml-auto";
+    del.onclick = () => { block.remove(); refreshEmpty(); };
+
+    row1.append(timeWrap, daysWrap, presetWrap, del);
+
+    // ── Row 2: price per charge type ──
+    const row2 = document.createElement('div');
+    row2.className = "flex flex-wrap items-center gap-x-4 gap-y-2";
+    TOU_TYPES.forEach((t) => {
+      const meta = TYPE_META[t];
+      const lab = document.createElement('label');
+      lab.className = "flex items-center gap-1.5 text-sm";
+      const name = document.createElement('span');
+      name.className = "font-semibold w-16"; name.style.color = meta.color;
+      name.textContent = meta.icon + " " + meta.label;
+      const eur = document.createElement('span');
+      eur.className = "text-slate-500 text-xs"; eur.textContent = "€";
+      const v = (prices[t] !== undefined && prices[t] !== null) ? prices[t] : "";
+      const inp = mkInput('number', v, "band-price w-20 text-right",
+                          { step: "0.01", min: "0", max: "9.99" });
+      inp.dataset.type = t;
+      inp.placeholder = BASE_PRICES[t] || "";   // empty → base price is used
+      lab.append(name, eur, inp);
+      row2.appendChild(lab);
+    });
+
+    block.append(row1, row2);
+    return block;
+  }
+
+  function refreshEmpty() {
+    const has = document.querySelectorAll('#bands-list .band-block').length > 0;
+    document.getElementById('no-bands').classList.toggle('hidden', has);
+  }
+
+  function addBand() {
+    document.getElementById('bands-list').appendChild(buildBlock({}));
+    refreshEmpty();
+  }
+
+  function collectBands() {
+    const out = [];
+    document.querySelectorAll('#bands-list .band-block').forEach((bl) => {
+      const start = bl.querySelector('.band-start').value;
+      const end = bl.querySelector('.band-end').value;
+      if (!start || !end) return;
+      const days = [...bl.querySelectorAll('.day-toggle')]
+        .filter((b) => b.dataset.on === "1")
+        .map((b) => parseInt(b.dataset.day));
+      const prices = {};
+      bl.querySelectorAll('.band-price').forEach((p) => {
+        const v = parseFloat(p.value);
+        prices[p.dataset.type] = isNaN(v) ? null : v;
+      });
+      out.push({ start: start, end: end, days: days, prices: prices });
+    });
+    return out;
+  }
+
+  (function () {
+    const list = document.getElementById('bands-list');
+    (BANDS || []).forEach((b) => list.appendChild(buildBlock(b)));
+    refreshEmpty();
+    // Inject the serialized bands into the htmx request right before it fires.
+    document.getElementById('tou-form').addEventListener('htmx:configRequest', (e) => {
+      e.detail.parameters['bands_json'] = JSON.stringify(collectBands());
+    });
+  })();
+</script>
+{% endblock %}

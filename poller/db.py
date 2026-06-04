@@ -107,6 +107,10 @@ CREATE INDEX IF NOT EXISTS idx_positions_vehicle ON positions(vehicle_id, record
 CREATE INDEX IF NOT EXISTS idx_trip_positions_trip ON trip_positions(trip_id);
 CREATE INDEX IF NOT EXISTS idx_trips_vehicle ON trips(vehicle_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_charges_vehicle ON charges(vehicle_id, started_at);
+-- Charge/Wallbox queries (power curve, time-of-use cost split, "has power" EXISTS)
+-- filter charging=1 and range/scan recorded_at; a small partial index keeps them
+-- fast as `positions` grows to millions of rows (~8% of rows are charging=1).
+CREATE INDEX IF NOT EXISTS idx_positions_charging_recorded ON positions(recorded_at) WHERE charging = 1;
 """
 
 # self.get_battery_capacity() is now stored in settings table, not hardcoded

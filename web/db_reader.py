@@ -119,6 +119,27 @@ def get_db_size_bytes() -> int:
     return total
 
 
+def get_trip_track(trip_id: int) -> list[dict]:
+    """Full ordered GPS track for one trip (for GPX export — not downsampled)."""
+    db = _get()
+    rows = db.execute(
+        "SELECT recorded_at, latitude, longitude, speed_kmh, soc FROM trip_positions "
+        "WHERE trip_id=? AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY id",
+        (trip_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def checkpoint() -> None:
+    """Flush the WAL into the main DB file so a file copy/download is consistent."""
+    c = _conn_rw()
+    try:
+        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        c.commit()
+    finally:
+        c.close()
+
+
 def get_secret(key: str, default: str = "") -> str:
     """Read a secret setting, decrypting transparently (plaintext passes through)."""
     return crypto.decrypt(get_setting(key, default))

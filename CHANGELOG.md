@@ -18,6 +18,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   the current database size.
 - **Health endpoint** `GET /healthz` (+ Docker HEALTHCHECK): reports whether the poll
   loop is alive, so a wedged poller is visible instead of data silently stopping.
+- **Data export & backup.** Settings → Export: download Trips and Charges as CSV and a
+  full database backup; each trip page now has a GPX download of its GPS track.
 
 ### Changed
 - **Faster charge/Wallbox history at scale.** Added a partial index on the telemetry

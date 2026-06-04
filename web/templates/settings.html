@@ -368,6 +368,20 @@
       </form>
     </div>
 
+    <!-- Export / backup -->
+    <div class="card">
+      <h2 class="font-semibold text-white mb-1">{{ t('export_section') }}</h2>
+      <p class="text-xs text-slate-400 mb-4">{{ t('export_db_hint') }}</p>
+      <div class="flex flex-wrap gap-2">
+        <a href="api/export/trips.csv" download
+           class="border border-slate-600 text-slate-200 text-sm font-medium rounded-lg px-4 py-2 hover:border-brand">{{ t('export_trips') }}</a>
+        <a href="api/export/charges.csv" download
+           class="border border-slate-600 text-slate-200 text-sm font-medium rounded-lg px-4 py-2 hover:border-brand">{{ t('export_charges') }}</a>
+        <a href="api/export/database" download
+           class="border border-slate-600 text-slate-200 text-sm font-medium rounded-lg px-4 py-2 hover:border-brand">{{ t('export_db') }}</a>
+      </div>
+    </div>
+
   </div>
 
 </div>

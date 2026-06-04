@@ -774,6 +774,59 @@ async def save_retention(request: Request):
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("retention_saved")}</span>')
 
 
+def _csv_response(rows: list, filename: str) -> Response:
+    import csv, io
+    buf = io.StringIO()
+    if rows:
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/api/export/trips.csv")
+async def export_trips_csv():
+    return _csv_response(db_reader.get_trips(limit=1_000_000), "leapmotor-mate-trips.csv")
+
+
+@app.get("/api/export/charges.csv")
+async def export_charges_csv():
+    return _csv_response(db_reader.get_charges(limit=1_000_000), "leapmotor-mate-charges.csv")
+
+
+@app.get("/trips/{trip_id}/route.gpx")
+async def export_trip_gpx(trip_id: int):
+    import xml.sax.saxutils as su
+    pts = db_reader.get_trip_track(trip_id)
+    trip = db_reader.get_trip_detail(trip_id)
+    name = su.escape(f"Leapmotor trip {trip_id}" + (f" — {trip['started_at'][:16]}" if trip and trip.get('started_at') else ""))
+    seg = "".join(
+        f'<trkpt lat="{p["latitude"]}" lon="{p["longitude"]}">'
+        + (f'<time>{p["recorded_at"]}</time>' if p.get("recorded_at") else "")
+        + (f'<extensions><speed>{p["speed_kmh"]}</speed></extensions>' if p.get("speed_kmh") is not None else "")
+        + '</trkpt>'
+        for p in pts
+    )
+    gpx = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<gpx version="1.1" creator="Leapmotor Mate" xmlns="http://www.topografix.com/GPX/1/1">'
+           f'<trk><name>{name}</name><trkseg>{seg}</trkseg></trk></gpx>')
+    return Response(gpx, media_type="application/gpx+xml",
+                    headers={"Content-Disposition": f'attachment; filename="leapmotor-trip-{trip_id}.gpx"'})
+
+
+@app.get("/api/export/database")
+async def export_database():
+    """Download the SQLite database as a backup. NB: encrypted credentials need the
+    matching /data/secret.key to be usable on another install."""
+    try:
+        db_reader.checkpoint()
+    except Exception:  # noqa: BLE001
+        pass
+    return FileResponse(db_reader.DB_PATH, media_type="application/octet-stream",
+                        filename="leapmotor_mate.db")
+
+
 @app.post("/api/settings/mqtt", response_class=HTMLResponse)
 async def save_mqtt(request: Request):
     """Save the MQTT bridge config (broker + options). Opt-in via the enable flag."""

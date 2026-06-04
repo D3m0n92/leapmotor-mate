@@ -151,8 +151,16 @@ class MqttService:
     def publish_discovery(self, data):
         vin = data.vin
         prefix = self.topic_prefix
-        device_id = f"leapmotor_mate_{vin.lower()}"
-        device = {"identifiers": [device_id], "name": f"Leapmotor Mate {vin[-6:]}",
+        # Scope the HA device to the topic prefix, so a second instance on a different
+        # prefix (e.g. a test poller alongside the production add-on, same car/VIN)
+        # creates a SEPARATE device instead of fighting over the same discovery configs
+        # and entities. The default prefix "leapmotor" yields the exact same id as
+        # before → existing installs are completely unaffected.
+        device_id = f"{prefix}_mate_{vin.lower()}"
+        name = f"Leapmotor Mate {vin[-6:]}"
+        if prefix != "leapmotor":
+            name += f" ({prefix})"
+        device = {"identifiers": [device_id], "name": name,
                   "manufacturer": "Leapmotor", "model": "Vehicle", "sw_version": "Mate"}
 
         def cfg(component, key, conf):

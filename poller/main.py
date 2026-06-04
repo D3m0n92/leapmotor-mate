@@ -47,11 +47,19 @@ def _handle_mqtt_command(client, service, db, vin: str, cmd: str, value):
         elif cmd == "open_trunk":  api.open_trunk(vin)
         elif cmd == "close_trunk": api.close_trunk(vin)
         elif cmd == "find_car":    api._remote_control(vin=vin, action="find_car")
-        elif cmd == "climate":
-            if value != "ON":
-                return               # A/C off isn't reliable on the B10 → on only
-            api.ac_switch(vin)
-            optimistic = ("climate_on", True)
+        elif cmd == "climate_cool":
+            api.quick_cool(vin);         optimistic = ("climate_on", True)
+        elif cmd == "climate_heat":
+            api.quick_heat(vin);         optimistic = ("climate_on", True)
+        elif cmd == "climate_defrost":
+            api.windshield_defrost(vin); optimistic = ("climate_on", True)
+        elif cmd == "climate_off":
+            # ac_switch is a toggle (the only A/C deactivation command this API has);
+            # only send it when the A/C is known to be on, so an "A/C Off" press can't
+            # accidentally switch it on. The web UI guards direction the same way.
+            if getattr(service, "last_climate_on", None) is False:
+                return
+            api.ac_switch(vin);          optimistic = ("climate_on", False)
         else:
             return
         log.info("MQTT: executed command %s %s", cmd, value or "")
@@ -232,18 +240,21 @@ def main():
             # real failure. Retry at the normal cadence a couple of times in case it's
             # transient, then back off like any offline state. Recovers on its own once
             # the car reports again. (This used to surface as a scary "Poll error:
-            # 'signal'" KeyError.)
+            # 'signal'" KeyError.) We log the back-off WARNING only once, not every
+            # cycle: a parked car can stay asleep for hours and an ever-climbing
+            # "after N tries" warning reads like an escalating failure when it isn't.
             empty_status_count += 1
             if empty_status_count >= 3:
                 recorder.mark_offline()
-                interval = recorder.poll_interval
-                log.warning("Vehicle still not reporting live data after %d tries — backing "
-                            "off %ds (car asleep or temporarily unavailable)",
-                            empty_status_count, interval)
-            else:
-                interval = recorder.poll_interval
+            interval = recorder.poll_interval
+            if empty_status_count < 3:
                 log.info("Vehicle returned no live data (asleep or briefly unavailable) — "
                          "retry %d/3", empty_status_count)
+            elif empty_status_count == 3:
+                log.warning("Vehicle not reporting live data (car asleep or unavailable) — "
+                            "backing off to %ds polling; recovers automatically when the car "
+                            "reports again.", interval)
+            # already backed off (count > 3): stay quiet so a sleeping car can't spam the log
         except Exception as exc:
             log.error("Poll error: %s", exc)
             recorder.mark_offline()

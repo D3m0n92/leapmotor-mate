@@ -18,7 +18,7 @@ import ha_client
 import geocode
 import mqtt_test
 
-MATE_VERSION = "1.8.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.8.1"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -107,6 +107,11 @@ async def overview(request: Request):
     vehicle, settings = db_reader.get_vehicle()
     status = db_reader.get_latest_status()
     trips = db_reader.get_trips(limit=3)
+    # get_trips() returns raw UTC rows; overview.html slices started_at[:10]/[11:16]
+    # directly, so localize here like the Trips page / trip detail do (issue #12).
+    for tr in trips:
+        tr["started_at"] = db_reader._local_iso(tr.get("started_at"))
+        tr["ended_at"] = db_reader._local_iso(tr.get("ended_at"))
     charges = db_reader.get_charges(limit=1)
     return templates.TemplateResponse(request, "overview.html", _ctx(
         page="overview", vehicle=vehicle, settings=settings,

@@ -3,6 +3,27 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.1] — 2026-06-04
+
+### Added
+- **Climate over MQTT is now four buttons** — *Quick Cool*, *Quick Heat*, *Defrost*
+  and *A/C Off* — mirroring the in-app Commands page, instead of a single on/off
+  switch. The old switch only ran the ventilation fan and its OFF did nothing; the
+  buttons send the real climate commands. Turning the A/C fully **off** is
+  best-effort — the vehicle cloud doesn't reliably honour it (an open issue with the
+  Leapmotor API). The deprecated switch is removed from Home Assistant automatically;
+  the read-only *Climate* state sensor stays. (Reported in #14.)
+- **Malaysian Ringgit (MYR)** added to the display currencies. (Requested in #13.)
+
+### Fixed
+- **Recent Trips on the Overview showed UTC** while the Trips page showed local time.
+  The Overview now converts trip times to your local timezone too. (#12)
+
+### Changed
+- **Quieter logs when the car is asleep.** A parked car in deep sleep is normal; the
+  back-off is now logged once instead of repeating every cycle with a climbing
+  "after N tries" count that read like an escalating failure.
+
 ## [1.8.0] — 2026-06-04
 
 ### Added

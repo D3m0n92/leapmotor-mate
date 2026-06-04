@@ -29,6 +29,7 @@ class MqttService:
         self.client = None
         self.on_command = None          # callback(vin, command_or_entity, value)
         self._discovery_sent = False
+        self.last_climate_on = None     # latest polled A/C state, for the "A/C Off" toggle guard
 
     def connect(self) -> bool:
         log.info("MQTT: connecting to %s:%d (TLS=%s, discovery=%s, prefix=%s)",
@@ -90,6 +91,7 @@ class MqttService:
     # ── Publishing ────────────────────────────────────────────────────────────
 
     def publish_status(self, data):
+        self.last_climate_on = data.climate_on  # track for the "A/C Off" command guard
         if not self.client:
             if not self.connect():
                 return
@@ -220,13 +222,21 @@ class MqttService:
             ("lock", "Lock", "mdi:lock"), ("unlock", "Unlock", "mdi:lock-open"),
             ("open_trunk", "Open Trunk", "mdi:car-back"), ("close_trunk", "Close Trunk", "mdi:car-back"),
             ("find_car", "Find Car", "mdi:car-search"),
+            # Climate is exposed as momentary buttons (not a switch): the API has no
+            # single on/off toggle, only distinct mode commands + ac_switch to deactivate.
+            ("climate_cool", "Quick Cool", "mdi:snowflake"),
+            ("climate_heat", "Quick Heat", "mdi:fire"),
+            ("climate_defrost", "Defrost", "mdi:car-defrost-front"),
+            ("climate_off", "A/C Off", "mdi:snowflake-off"),
         ]:
             cfg("button", key, {"name": name, "command_topic": f"{prefix}/{vin}/command",
                                 "payload_press": key, "icon": icon})
 
-        cfg("switch", "climate", {"name": "Climate", "command_topic": f"{prefix}/{vin}/climate/set",
-                                  "state_topic": f"{prefix}/{vin}/climate_on",
-                                  "payload_on": "ON", "payload_off": "OFF", "icon": "mdi:air-conditioner"})
+        # The old single "Climate" switch is deprecated in favour of the buttons above
+        # (a plain switch can't model cool/heat/defrost and its OFF was a no-op). Clear
+        # its retained discovery config so it disappears from existing installs. The
+        # read-only "Climate" binary_sensor (climate_on) still shows the live A/C state.
+        self.client.publish(f"{_DISC}/switch/{device_id}/climate/config", "", retain=True)
         cfg("device_tracker", "location", {"name": "Location",
                                            "json_attributes_topic": f"{prefix}/{vin}/location",
                                            "state_topic": f"{prefix}/{vin}/location",

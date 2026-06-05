@@ -11,7 +11,7 @@ _T: dict[str, dict[str, str]] = {
         "map_subtitle":         "Everywhere you've driven, and your most-visited places",
         "map_frequent_places":  "Frequent places",
         "map_visits":           "Visits",
-        "map_track_dots":       "Driven points",
+        "map_routes":           "Routes",
         "map_points":           "GPS points",
         "map_no_data":          "No GPS data yet — drive a bit and your map will fill in.",
         # Trip profile chart
@@ -438,7 +438,7 @@ _T: dict[str, dict[str, str]] = {
         "map_subtitle":         "Tutti i posti dove hai guidato e i luoghi più frequentati",
         "map_frequent_places":  "Luoghi frequenti",
         "map_visits":           "Visite",
-        "map_track_dots":       "Punti percorsi",
+        "map_routes":           "Percorsi",
         "map_points":           "punti GPS",
         "map_no_data":          "Ancora nessun dato GPS — guida un po' e la mappa si popolerà.",
         # Trip profile chart
@@ -865,7 +865,7 @@ _T: dict[str, dict[str, str]] = {
         "map_subtitle":         "Partout où vous avez roulé et vos lieux les plus visités",
         "map_frequent_places":  "Lieux fréquents",
         "map_visits":           "Visites",
-        "map_track_dots":       "Points parcourus",
+        "map_routes":           "Itinéraires",
         "map_points":           "points GPS",
         "map_no_data":          "Pas encore de données GPS — roulez un peu et la carte se remplira.",
         # Trip profile chart
@@ -1292,7 +1292,7 @@ _T: dict[str, dict[str, str]] = {
         "map_subtitle":         "Überall, wo du gefahren bist, und deine meistbesuchten Orte",
         "map_frequent_places":  "Häufige Orte",
         "map_visits":           "Besuche",
-        "map_track_dots":       "Gefahrene Punkte",
+        "map_routes":           "Routen",
         "map_points":           "GPS-Punkte",
         "map_no_data":          "Noch keine GPS-Daten — fahr ein wenig und die Karte füllt sich.",
         # Trip profile chart

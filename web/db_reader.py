@@ -1183,20 +1183,44 @@ def get_battery_health(min_soc_delta: float = 12.0) -> dict:
 
 # ── Global map (all tracks + frequent places) ──────────────────────────────────
 
-def get_all_track(max_points: int = 4000) -> list[list[float]]:
-    """All recorded GPS points across every trip, downsampled to ``max_points`` and
-    returned as [lat, lon] pairs. Drawn as a density layer (small dots) on the global
-    map, so it shows where the car actually goes without joining separate trips."""
+def get_all_track(max_points: int = 12000) -> list[list[list[float]]]:
+    """Every trip's GPS track as a list of polylines (one [lat, lon] list per trip),
+    so the global map draws the actual driven roads as connected lines instead of
+    loose dots. Points are NEVER joined across trips. Downsampled to roughly
+    ``max_points`` total while always keeping each trip's first and last point, so the
+    lines stay continuous even when zoomed in."""
     db = _get()
     rows = db.execute(
-        "SELECT latitude, longitude FROM trip_positions "
-        "WHERE latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY id"
+        "SELECT trip_id, latitude, longitude FROM trip_positions "
+        "WHERE latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY trip_id, id"
     ).fetchall()
-    pts = [[round(r["latitude"], 5), round(r["longitude"], 5)] for r in rows]
-    if len(pts) <= max_points:
-        return pts
-    step = len(pts) / max_points
-    return [pts[int(i * step)] for i in range(max_points)]
+    segments: list[list[list[float]]] = []
+    cur_id, cur = None, []
+    for r in rows:
+        if r["trip_id"] != cur_id:
+            if len(cur) >= 2:
+                segments.append(cur)
+            cur, cur_id = [], r["trip_id"]
+        cur.append([round(r["latitude"], 5), round(r["longitude"], 5)])
+    if len(cur) >= 2:
+        segments.append(cur)
+
+    total = sum(len(s) for s in segments)
+    if total <= max_points or total == 0:
+        return segments
+    # Proportional per-trip downsample, keeping each segment's real endpoints.
+    step = total / max_points
+    out = []
+    for s in segments:
+        keep = max(2, int(len(s) / step))
+        if keep >= len(s):
+            out.append(s)
+            continue
+        st = len(s) / keep
+        ds = [s[int(i * st)] for i in range(keep)]
+        ds[-1] = s[-1]
+        out.append(ds)
+    return out
 
 
 def get_frequent_places(min_visits: int = 2, top_n: int = 15) -> list[dict]:

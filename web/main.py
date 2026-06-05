@@ -438,8 +438,15 @@ async def settings_page(request: Request):
                 "geocoder_key_set": bool(db_reader.get_setting("geocoder_key", "")),
                 "positions_retention_days": db_reader.get_setting("positions_retention_days", "0"),
                 "db_size_mb": round(db_reader.get_db_size_bytes() / 1048576, 1)}
+    # Per-card open/collapsed state — saved in the DB (shared across devices), with
+    # the enable flag as the first-time default until the user toggles the chevron.
+    card_open = {
+        "abrp": _card_open("abrp", settings["abrp_enabled"] == "1"),
+        "mqtt": _card_open("mqtt", settings["mqtt_enabled"] == "1"),
+        "wallbox": _card_open("wallbox", True),
+    }
     return templates.TemplateResponse(request, "settings.html", _ctx(
-        page="settings", vehicle=vehicle, settings=settings,
+        page="settings", vehicle=vehicle, settings=settings, card_open=card_open,
         charge_types=db_reader.CHARGE_TYPES,
         ha_url=db_reader.get_setting("ha_url", ""),
         ha_has_token=bool(db_reader.get_setting("ha_token", "")),
@@ -925,6 +932,72 @@ async def test_mqtt(request: Request):
     if ok:
         return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">🟢 {t("mqtt_connected")}</span>')
     return HTMLResponse(f'<span style="color:#ef4444;font-size:13px">🔴 {t("mqtt_failed")}: {reason}</span>')
+
+
+_UI_CARD_KEYS = {"abrp", "mqtt", "wallbox"}
+
+
+def _card_open(key: str, default: bool) -> bool:
+    """Open/collapsed state of a settings card: the user's last saved choice if any,
+    otherwise `default` (the enable flag). Stored server-side so it survives reloads
+    and is the same on every device/browser."""
+    saved = db_reader.get_setting(f"ui_{key}_open", "")
+    return saved == "1" if saved in ("0", "1") else default
+
+
+@app.post("/api/settings/ui-state")
+async def save_ui_state(request: Request):
+    """Persist a settings card's open/collapsed state (chevron). Fire-and-forget from
+    the page; saved to the DB so it's shared across devices, not just this browser."""
+    form = await request.form()
+    key = (form.get("key") or "").strip()
+    if key in _UI_CARD_KEYS:
+        db_reader.set_setting(f"ui_{key}_open",
+                              "1" if form.get("open") in ("1", "on", "true") else "0")
+    return Response(status_code=204)
+
+
+def _status_dot(color: str, label: str) -> HTMLResponse:
+    """A small coloured status dot + label for an integration summary header —
+    same visual language as the Wallbox connection badge."""
+    return HTMLResponse(
+        f'<span class="inline-flex items-center gap-1.5 text-xs text-{color}-400">'
+        f'<span class="w-2 h-2 rounded-full bg-{color}-400"></span>{label}</span>')
+
+
+@app.get("/api/settings/abrp/status", response_class=HTMLResponse)
+async def abrp_status(request: Request):
+    """At-a-glance ABRP state for the collapsed summary. ABRP is fire-and-forget
+    telemetry (no live connection to test), so this reflects config state."""
+    t = i18n.get_t(db_reader.get_language())
+    if db_reader.get_setting("abrp_enabled", "0") != "1":
+        return _status_dot("slate", t("status_off"))
+    if not db_reader.get_setting("abrp_token", ""):
+        return _status_dot("amber", t("status_unconfigured"))
+    return _status_dot("emerald", t("status_active"))
+
+
+@app.get("/api/settings/mqtt/status", response_class=HTMLResponse)
+async def mqtt_status(request: Request):
+    """Live MQTT broker state for the collapsed summary — grey when off, amber when
+    enabled but unconfigured, green/red from a bounded connect (like the Wallbox dot)."""
+    t = i18n.get_t(db_reader.get_language())
+    if db_reader.get_setting("mqtt_enabled", "0") != "1":
+        return _status_dot("slate", t("status_off"))
+    broker = db_reader.get_setting("mqtt_broker", "")
+    if not broker:
+        return _status_dot("amber", t("status_unconfigured"))
+    import asyncio
+    ok, _reason = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: mqtt_test.test_connection(
+            broker,
+            db_reader.get_setting("mqtt_port", "1883"),
+            db_reader.get_setting("mqtt_user", "") or None,
+            db_reader.get_secret("mqtt_pass", "") or None,
+            db_reader.get_setting("mqtt_tls", "0") == "1",
+            db_reader.get_setting("mqtt_tls_insecure", "0") == "1",
+        ))
+    return _status_dot("emerald", t("ha_status_ok")) if ok else _status_dot("red", t("ha_status_ko"))
 
 
 @app.post("/api/settings/language")

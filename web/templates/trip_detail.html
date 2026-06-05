@@ -129,12 +129,19 @@
     (function () {
       var el = document.getElementById('trip-profile');
       if (!el || typeof ApexCharts === 'undefined') return;
-      var pts = coords.filter(function (p) { return p.recorded_at && (p.soc != null || p.speed_kmh != null); });
+      var pts = coords.filter(function (p) { return p.soc != null || p.speed_kmh != null; });
       if (!pts.length) return;
-      var t0 = new Date(pts[0].recorded_at).getTime();
+      // X axis = minutes since trip start when timestamps are present; otherwise fall
+      // back to the sample index so the chart always renders.
+      var t0 = pts[0].recorded_at ? new Date(pts[0].recorded_at).getTime() : NaN;
+      var useTime = !isNaN(t0);
       var socData = [], spdData = [];
-      pts.forEach(function (p) {
-        var x = Math.max(0, Math.round((new Date(p.recorded_at).getTime() - t0) / 60000));
+      pts.forEach(function (p, i) {
+        var x = i;
+        if (useTime) {
+          var t = new Date(p.recorded_at).getTime();
+          x = isNaN(t) ? i : Math.max(0, Math.round((t - t0) / 60000));
+        }
         if (p.soc != null) socData.push({ x: x, y: p.soc });
         spdData.push({ x: x, y: p.speed_kmh || 0 });
       });
@@ -147,7 +154,8 @@
         stroke: { width: [3, 2], curve: 'smooth' },
         fill: { type: 'solid', opacity: [0.08, 0] },
         xaxis: { type: 'numeric', tickAmount: 6,
-                 labels: { style: { colors: '#64748b' }, formatter: function (v) { return Math.round(v) + '′'; } },
+                 labels: { style: { colors: '#64748b' },
+                           formatter: function (v) { return useTime ? Math.round(v) + '′' : Math.round(v); } },
                  axisBorder: { show: false }, axisTicks: { color: '#334155' } },
         yaxis: [
           { min: 0, max: 100, forceNiceScale: true,
@@ -159,7 +167,7 @@
         legend: { show: false },
         dataLabels: { enabled: false },
         tooltip: { theme: 'dark', shared: true, intersect: false,
-                   x: { formatter: function (v) { return Math.round(v) + ' min'; } } }
+                   x: { formatter: function (v) { return useTime ? Math.round(v) + ' min' : '#' + Math.round(v); } } }
       });
       el._c.render();
     })();

@@ -713,7 +713,7 @@ def get_trip_detail(trip_id: int) -> Optional[dict]:
     if not trip:
         return None
     positions = db.execute(
-        "SELECT latitude, longitude, speed_kmh, soc FROM trip_positions WHERE trip_id = ? ORDER BY id",
+        "SELECT recorded_at, latitude, longitude, speed_kmh, soc FROM trip_positions WHERE trip_id = ? ORDER BY id",
         (trip_id,),
     ).fetchall()
     trip_d = dict(trip)

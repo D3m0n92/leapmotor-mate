@@ -129,45 +129,64 @@
     (function () {
       var el = document.getElementById('trip-profile');
       if (!el || typeof ApexCharts === 'undefined') return;
+      if (el._c) { try { el._c.destroy(); } catch (e) {} }
       var pts = coords.filter(function (p) { return p.soc != null || p.speed_kmh != null; });
       if (!pts.length) return;
-      // X axis = minutes since trip start when timestamps are present; otherwise fall
-      // back to the sample index so the chart always renders.
+
+      // X labels = minutes since trip start (or sample index if timestamps absent).
       var t0 = pts[0].recorded_at ? new Date(pts[0].recorded_at).getTime() : NaN;
       var useTime = !isNaN(t0);
-      var socData = [], spdData = [];
+      var labels = [], socArr = [], spdArr = [];
       pts.forEach(function (p, i) {
-        var x = i;
+        var lbl = String(i);
         if (useTime) {
           var t = new Date(p.recorded_at).getTime();
-          x = isNaN(t) ? i : Math.max(0, Math.round((t - t0) / 60000));
+          lbl = isNaN(t) ? String(i) : Math.max(0, Math.round((t - t0) / 60000)) + "′";
         }
-        if (p.soc != null) socData.push({ x: x, y: p.soc });
-        spdData.push({ x: x, y: p.speed_kmh || 0 });
+        labels.push(lbl);
+        socArr.push(p.soc != null ? p.soc : null);
+        spdArr.push(p.speed_kmh != null ? p.speed_kmh : 0);
       });
+
+      var nmSoc = {{ t('soc')|tojson }};
+      var nmSpd = {{ t('speed')|tojson }};
+      var spdMax = 1;
+      spdArr.forEach(function (v) { if (v != null && v > spdMax) spdMax = v; });
+      spdMax = Math.ceil(spdMax / 10) * 10;
+
+      // Mirrors the proven charge-power chart config: plain-array data + categories +
+      // seriesName-bound y-axes (multi-axis needs the binding or nothing draws).
       el._c = new ApexCharts(el, {
-        chart: { type: 'line', height: 200, fontFamily: 'inherit', background: 'transparent',
-                 toolbar: { show: false }, animations: { enabled: false } },
-        series: [{ name: '{{ t('soc') }}', data: socData },
-                 { name: '{{ t('speed') }}', data: spdData }],
+        chart: { type: 'line', height: 200, toolbar: { show: false }, zoom: { enabled: false },
+                 fontFamily: 'inherit', background: 'transparent', parentHeightOffset: 0,
+                 animations: { enabled: false } },
+        series: [{ name: nmSoc, type: 'area', data: socArr },
+                 { name: nmSpd, type: 'line', data: spdArr }],
         colors: ['#22c55e', '#38bdf8'],
-        stroke: { width: [3, 2], curve: 'smooth' },
-        fill: { type: 'solid', opacity: [0.08, 0] },
-        xaxis: { type: 'numeric', tickAmount: 6,
-                 labels: { style: { colors: '#64748b' },
-                           formatter: function (v) { return useTime ? Math.round(v) + '′' : Math.round(v); } },
-                 axisBorder: { show: false }, axisTicks: { color: '#334155' } },
-        yaxis: [
-          { min: 0, max: 100, forceNiceScale: true,
-            labels: { style: { colors: '#22c55e' }, formatter: function (v) { return v.toFixed(0); } } },
-          { opposite: true, min: 0,
-            labels: { style: { colors: '#38bdf8' }, formatter: function (v) { return v.toFixed(0); } } }
-        ],
-        grid: { borderColor: '#0f1a2e' },
-        legend: { show: false },
+        stroke: { curve: 'smooth', width: [2, 2] },
+        fill: { type: ['gradient', 'solid'],
+                gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] } },
         dataLabels: { enabled: false },
+        markers: { size: 0 },
+        xaxis: { categories: labels, tickAmount: 6, tooltip: { enabled: false },
+                 labels: { style: { colors: '#64748b', fontSize: '10px' }, rotate: 0, hideOverlappingLabels: true },
+                 axisBorder: { show: false }, axisTicks: { show: false } },
+        yaxis: [
+          { seriesName: nmSoc, min: 0, max: 100, forceNiceScale: true,
+            labels: { style: { colors: '#22c55e', fontSize: '10px' }, formatter: function (v) { return v != null ? v.toFixed(0) : ''; } },
+            title: { text: 'SoC %', style: { color: '#22c55e', fontSize: '10px' } } },
+          { opposite: true, seriesName: nmSpd, min: 0, max: spdMax,
+            labels: { style: { colors: '#38bdf8', fontSize: '10px' }, formatter: function (v) { return v != null ? v.toFixed(0) : ''; } },
+            title: { text: 'km/h', style: { color: '#38bdf8', fontSize: '10px' } } },
+        ],
+        grid: { borderColor: '#1e293b', strokeDashArray: 4, padding: { left: 8, right: 8 } },
+        legend: { show: false },
         tooltip: { theme: 'dark', shared: true, intersect: false,
-                   x: { formatter: function (v) { return useTime ? Math.round(v) + ' min' : '#' + Math.round(v); } } }
+                   y: { formatter: function (v, o) {
+                          if (v == null) return '';
+                          var nm = o.w.config.series[o.seriesIndex].name;
+                          return nm === nmSpd ? v.toFixed(0) + ' km/h' : v.toFixed(1) + ' %';
+                        } } },
       });
       el._c.render();
     })();

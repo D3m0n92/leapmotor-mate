@@ -1,0 +1,70 @@
+name: Sync add-on repo
+
+# Keeps the thin add-on repo (ProtossBlaster/leapmotor-mate-addon) in lockstep
+# with this code repo. On every published release it bumps MATE_REF in the
+# add-on Dockerfile and version in config.yaml, then commits + pushes to the
+# add-on repo — so the two repos never drift and users never re-add anything.
+#
+# Requires a repo secret ADDON_REPO_TOKEN: a token with Contents: write on
+# ProtossBlaster/leapmotor-mate-addon (the default GITHUB_TOKEN cannot push to
+# another repository). See the setup note in the PR/commit message.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Version tag to sync into the add-on (e.g. v1.10.1)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-addon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          REF="${{ github.event.release.tag_name || github.event.inputs.ref }}"
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::'$REF' is not a vX.Y.Z tag — refusing to sync."
+            exit 1
+          fi
+          echo "tag=$REF" >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          echo "Syncing add-on to $REF (config version ${REF#v})"
+
+      - name: Checkout add-on repo
+        uses: actions/checkout@v4
+        with:
+          repository: ProtossBlaster/leapmotor-mate-addon
+          token: ${{ secrets.ADDON_REPO_TOKEN }}
+
+      - name: Bump MATE_REF and version
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          sed -i -E "s|^ARG MATE_REF=.*|ARG MATE_REF=${TAG}|" leapmotor_mate/Dockerfile
+          sed -i -E "s|^version: .*|version: \"${VERSION}\"|"  leapmotor_mate/config.yaml
+          echo "Dockerfile : $(grep '^ARG MATE_REF=' leapmotor_mate/Dockerfile)"
+          echo "config.yaml: $(grep '^version:'      leapmotor_mate/config.yaml)"
+
+      - name: Commit and push if changed
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Add-on already at ${TAG} — nothing to do."
+            echo "Add-on already at \`${TAG}\` — nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git add leapmotor_mate/Dockerfile leapmotor_mate/config.yaml
+          git commit -m "release: ${TAG} (MATE_REF=${TAG})"
+          git push
+          echo "Synced add-on repo to \`${TAG}\`." >> "$GITHUB_STEP_SUMMARY"

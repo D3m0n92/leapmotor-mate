@@ -77,7 +77,21 @@
 {% endmacro %}
 
 
-<div id="cmd-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-3xl">
+{# Comfort icons — real Material Design Icons: car seat heater/cooler, steering wheel, mirror #}
+{% macro comfort_icon(kind) %}
+<svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+{% if kind == 'seat_heat' %}<path d="M5 18C5 18 2 10 2 6S4 2 4 2H5C5 2 6 2 6 3S5 4 5 6 8 10 8 13 5 18 5 18M15 17C16.1 17 17 17.9 17 19V20C17 21.1 16.1 22 15 22H9C7 22 6 20.2 6 20.2C5.8 20 5.7 19.6 6 19.4C6 19.4 9 16.9 10 16.9H15M13.7 3.4L12.3 6.8L13.7 10.2L11.7 15L10 13.6L11.4 10.2L10 6.8L12 2L13.7 3.4M17.9 3.4L16.5 6.8L17.9 10.2L15.9 15L14.2 13.6L15.6 10.2L14.2 6.8L16.2 2L17.9 3.4M22 3.4L20.6 6.8L22 10.2L20 15L18.3 13.6L19.7 10.2L18.3 6.8L20.3 2L22 3.4"/>
+{% elif kind == 'seat_vent' %}<path d="M20.8 10.2L19.4 10.6L18.2 9.9V8.2L19.4 7.5L20.8 7.9L21.1 6.8L20 6.5L20.3 5.4L19.2 5.1L18.8 6.5L17.6 7.2L16.1 6.3V5L17.1 4L16.3 3.2L15.5 4L14.7 3.2L13.9 4L14.9 5V6.3L13.4 7.2L12.2 6.5L11.9 5.1L10.8 5.4L11.1 6.5L10 6.7L10.3 7.8L11.7 7.4L12.9 8.1V9.8L11.7 10.5L10.3 10.1L10 11.4L11.1 11.7L10.8 12.7L11.9 13L12.3 11.6L13.5 10.9L15 11.8V13.1L14 14.1L14.8 14.9L15.6 14.1L16.4 14.9L17.2 14.1L16.2 13.1V11.8L17.7 10.9L18.9 11.6L19.3 13L20.4 12.7L20 11.6L21.1 11.3L20.8 10.2M14 8.2L15.5 7.3L17 8.2V9.9L15.5 10.8L14 9.9V8.2M5 18C5 18 2 10 2 6S4 2 4 2H5C5 2 6 2 6 3S5 4 5 6 8 10 8 13 5 18 5 18M15 17C16.1 17 17 17.9 17 19V20C17 21.1 16.1 22 15 22H9C7 22 6 20.2 6 20.2C5.8 20 5.7 19.6 6 19.4C6 19.4 9 16.9 10 16.9H15Z"/>
+{% elif kind == 'steering' %}<path d="M13,19.92C14.8,19.7 16.35,18.95 17.65,17.65C18.95,16.35 19.7,14.8 19.92,13H16.92C16.7,14 16.24,14.84 15.54,15.54C14.84,16.24 14,16.7 13,16.92V19.92M10,8H14L17,11H19.92C19.67,9.05 18.79,7.38 17.27,6C15.76,4.66 14,4 12,4C10,4 8.24,4.66 6.73,6C5.21,7.38 4.33,9.05 4.08,11H7L10,8M11,19.92V16.92C10,16.7 9.16,16.24 8.46,15.54C7.76,14.84 7.3,14 7.08,13H4.08C4.3,14.77 5.05,16.3 6.35,17.6C7.65,18.9 9.2,19.67 11,19.92M12,2C14.75,2 17.1,3 19.05,4.95C21,6.9 22,9.25 22,12C22,14.75 21,17.1 19.05,19.05C17.1,21 14.75,22 12,22C9.25,22 6.9,21 4.95,19.05C3,17.1 2,14.75 2,12C2,9.25 3,6.9 4.95,4.95C6.9,3 9.25,2 12,2Z"/>
+{% elif kind == 'header' %}<path d="M7 18C7 18 4 10 4 6S6 2 6 2H7C7 2 8 2 8 3S7 4 7 6 10 10 10 13 7 18 7 18M12 17C11 17 8 19.5 8 19.5C7.7 19.7 7.8 20 8 20.3C8 20.3 9 22.1 11 22.1H17C18.1 22.1 19 21.2 19 20.1V19.1C19 18 18.1 17.1 17 17.1H12Z"/>
+{% else %}<path d="M8.29 10.28L11.53 7.03L12.59 8.09L9.35 11.34L8.29 10.28M8.7 14.61L14.36 8.95L15.42 10L9.76 15.67L8.7 14.61M18 3V21H6V3H18M20 1H4V23H20V1Z"/>
+{% endif %}
+</svg>
+{% endmacro %}
+
+
+<div id="cmd-grid" class="flex flex-col lg:flex-row gap-4 items-stretch">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-w-0">
 
   <!-- Vehicle controls — climate-style tiles -->
   <div class="card lg:col-span-2">
@@ -184,16 +198,16 @@
 
   <!-- Battery -->
   <div class="card">
-    <div class="flex items-center justify-between mb-3">
-      <div class="flex items-center gap-2">
+    <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
+      <div class="flex items-center gap-2 min-w-0">
         <span class="text-2xl">🔋</span>
         <span class="font-semibold text-white">{{ t('battery_section') }}</span>
         {% if status and status.battery_min_temp %}
-        <span class="text-xs text-slate-400">{{ "%.0f"|format(status.battery_min_temp) }}{{ t('min_temp') }}</span>
+        <span class="text-xs text-slate-400 whitespace-nowrap">{{ "%.0f"|format(status.battery_min_temp) }}°</span>
         {% endif %}
       </div>
       {% if charging is not none %}
-      <span id="badge-battery" class="text-sm font-bold px-3 py-1 rounded-full
+      <span id="badge-battery" class="text-sm font-bold px-3 py-1 rounded-full whitespace-nowrap shrink-0
         {% if charging %}text-yellow-400 bg-yellow-400/10 border border-yellow-400/30
         {% else %}text-slate-400 bg-slate-700 border border-slate-600{% endif %}">
         {% if charging %}⚡ {{ t('charging') }}{% else %}○ {{ t('not_charging') }}{% endif %}
@@ -228,5 +242,34 @@
       {{ climate_tile("windshield_defrost", t('clim_defrost'), "🌬️", clim_defrost) }}
     </div>
   </div>
+
+  </div>{# /cards column #}
+
+  {% if comfort %}
+  <!-- Comfort — read-only state sensors, a side card next to the controls block -->
+  <aside class="card w-full lg:w-96 shrink-0">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-slate-300">{{ comfort_icon('header') }}</span>
+      <span class="font-semibold text-white">{{ t('comfort_section') }}</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      {% for c in comfort %}
+      <div class="rounded-lg border p-3 flex flex-col items-center gap-2 text-center
+        {% if c.on and c.accent == 'vent' %}border-sky-400/40 bg-sky-400/5
+        {% elif c.on %}border-amber-400/40 bg-amber-400/5
+        {% else %}border-slate-700 bg-slate-800/40{% endif %}">
+        <span class="{% if not c.on %}text-slate-500{% elif c.accent == 'vent' %}text-sky-400{% else %}text-amber-400{% endif %}">{{ comfort_icon(c.icon) }}</span>
+        <span class="text-xs font-medium text-slate-200 leading-tight">{{ t(c.label_key) }}</span>
+        <span class="text-[11px] font-bold px-2 py-0.5 rounded-full
+          {% if c.on and c.accent == 'vent' %}text-sky-400 bg-sky-400/10 border border-sky-400/30
+          {% elif c.on %}text-amber-400 bg-amber-400/10 border border-amber-400/30
+          {% else %}text-slate-400 bg-slate-700 border border-slate-600{% endif %}">
+          {% if c.on %}{{ t('climate_on_state') }}{% if c.value > 1 %} · {{ c.value }}{% endif %}{% else %}{{ t('climate_off_state') }}{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+  {% endif %}
 
 </div>

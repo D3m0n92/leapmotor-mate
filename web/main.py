@@ -20,7 +20,7 @@ import geocode
 import mqtt_test
 import auth
 
-MATE_VERSION = "1.11.2"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.11.3"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -343,6 +343,7 @@ async def commands(request: Request):
     comfort = _comfort_rows(vehicle.get("vin") if vehicle else None)
     return templates.TemplateResponse(request, "commands.html", _ctx(
         page="commands", vehicle=vehicle, status=status, comfort=comfort,
+        ac_off_shown=capability_profile.command_shown(vehicle.get("vin") if vehicle else None, "climate_off"),
     ))
 
 
@@ -1082,6 +1083,7 @@ _COMMANDS = {
     "close_trunk":       command_client.close_trunk,
     "find_car":          command_client.find_car,
     "ac_on":             command_client.ac_on,
+    "ac_off":            command_client.ac_off,
     "quick_cool":        command_client.quick_cool,
     "quick_heat":        command_client.quick_heat,
     "windshield_defrost":command_client.windshield_defrost,
@@ -1111,8 +1113,12 @@ _COMMANDS = {
 async def cmd_grid(request: Request):
     status = db_reader.get_latest_status()
     vehicle, _ = db_reader.get_vehicle()
-    comfort = _comfort_rows(vehicle.get("vin") if vehicle else None)
-    return templates.TemplateResponse(request, "partials/cmd_grid.html", _ctx(status=status, comfort=comfort))
+    vin = vehicle.get("vin") if vehicle else None
+    comfort = _comfort_rows(vin)
+    return templates.TemplateResponse(request, "partials/cmd_grid.html", _ctx(
+        status=status, comfort=comfort,
+        ac_off_shown=capability_profile.command_shown(vin, "climate_off"),
+    ))
 
 
 @app.post("/api/poll-settings", response_class=HTMLResponse)
@@ -1322,16 +1328,18 @@ async def run_command(name: str, background_tasks: BackgroundTasks):
         return HTMLResponse(f'<span style="color:#fbbf24">⏳ {label} {wait}s</span>')
     _last_command_at = time.time()
 
-    # Climate: decide direction from the real state. A tile that's on → ac_switch
-    # (best-effort climate off — the B10 can't fully turn the A/C off via the API; even
-    # 0.3.1's ac_off()/operate=close only changes the setpoint, so we keep the toggle);
-    # a tile that's off → its own command. No optimistic overlay.
+    # Climate: decide direction from the real state. The master A/C tile that's on →
+    # ac_off (ac_switch operate=off — real full-off, drives 1938→0, B10-confirmed);
+    # a mode tile that's on → ac_switch toggle (stops that mode); a tile that's off →
+    # its own command. No optimistic overlay.
     overrides = dict(_OPTIMISTIC.get(name) or {})
     field = _CLIMATE_TILES.get(name)
     if field:
         cur = db_reader.get_latest_status() or {}
         if cur.get(field):                      # currently on → turn off
-            fn = command_client.ac_on           # ac_switch toggle (best-effort off)
+            # Master A/C tile → real full-off (ac_switch operate=off, drives 1938→0, B10-confirmed).
+            # Mode tiles (cool/heat/defrost) keep the ac_switch toggle (stops the active mode).
+            fn = command_client.ac_off if name == "ac_on" else command_client.ac_on
         overrides = {}                          # never fake climate state
 
     import asyncio

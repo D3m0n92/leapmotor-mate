@@ -3,6 +3,23 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.3] — 2026-06-06
+
+### Added
+- **Working A/C On/Off on the B10.** Turning the climate **fully off** now works on the B10: a new
+  **A/C** tile on the Commands → Climate card powers the air-conditioning off (and on). This uses the
+  newly-found command (`ac_switch` with `operate=off`, which drives the `acSwitch` signal to 0) —
+  discovered by on-car testing. Previously the B10 had no working remote A/C-off and the button was
+  hidden; the capability is now re-enabled for the B10 over both the web UI and Home Assistant (MQTT).
+
+### Changed
+- **Removed the 1.11.2 "A/C won't fully turn off" notice and the on-press confirmation** — they are
+  obsolete now that Mate can fully turn the climate off on the B10.
+
+### Internal
+- Reported the B10 A/C-off payload upstream (the library's `ac_off()` sends `operate=close`, which only
+  flips the B10 to AUTO; the B10 needs `operate=off`).
+
 ## [1.11.2] — 2026-06-06
 
 ### Added

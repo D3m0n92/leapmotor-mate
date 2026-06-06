@@ -333,10 +333,11 @@ def open_trunk():        return _session.execute(lambda api, vin: api.open_trunk
 def close_trunk():       return _session.execute(lambda api, vin: api.close_trunk(vin))
 def find_car():          return _session.execute(lambda api, vin: api.find_vehicle(vin))
 def ac_on():             return _session.execute(lambda api, vin: api.ac_switch(vin))
-# NB: leapmotor-api 0.3.1 has ac_off() (operate=close) but on the B10 it only changes
-# the setpoint to 26°, it does NOT turn the A/C off — so we don't use it. The B10 has no
-# working remote A/C-off via this API (the official app uses an undisclosed mechanism);
-# climate-off stays best-effort via ac_switch. Revisit if markoceri/kerniger expose it.
+# B10 A/C full-OFF: the working payload is ac_switch with operate=off (drives acSwitch
+# signal 1938 → 0). Found empirically on-car 2026-06-06 — the lib's ac_off() sends
+# operate=close, which on the B10 only flips the HVAC to AUTO (never off). Reported
+# upstream (markoceri/leapmotor-api#3).
+def ac_off():            return _session.execute(lambda api, vin: api.ac_switch(vin, params={"operate": "off"}))
 def quick_cool():        return _session.execute(lambda api, vin: api.quick_cool(vin))
 def quick_heat():        return _session.execute(lambda api, vin: api.quick_heat(vin))
 def windshield_defrost():return _session.execute(lambda api, vin: api.windshield_defrost(vin))

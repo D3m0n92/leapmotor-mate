@@ -21,7 +21,7 @@ Supported models: **B10 · C10 · T03** (European spec).
 ## Features
 
 - **Overview** — live status, battery, range, location map, vehicle picture.
-- **Trips** — automatic trip detection with route map, distance, energy, efficiency and regen.
+- **Trips** — automatic trip detection with route map, distance, energy, efficiency and regen. Each trip also shows its **total kWh consumed** and its **cost** (energy × the price per kWh of the last charge before the trip, in your currency).
 - **Charges** — charge sessions with AC/DC detection, energy added, power and a distribution chart.
 - **🆕 Charge prices** — flat 24h pricing or **time-of-use bands**: set prices per time window, per **day of the week** and per charge type, and each session is costed correctly (energy split across the bands it spans by the real power curve).
 - **Wallbox (optional)** — pair a wallbox already in Home Assistant to see live charging power/status, set the max charging current, and compare **AC delivered by the wallbox** vs **DC into the battery** per session, with charging efficiency.
@@ -189,7 +189,7 @@ Modelli supportati: **B10 · C10 · T03** (spec. europea).
 ## Funzionalità
 
 - **Panoramica** — stato live, batteria, autonomia, mappa posizione, immagine del veicolo.
-- **Viaggi** — rilevamento automatico con mappa del percorso, distanza, energia, efficienza e regen.
+- **Viaggi** — rilevamento automatico con mappa del percorso, distanza, energia, efficienza e regen. Ogni viaggio mostra anche i **kWh totali consumati** e il **costo** (energia × prezzo per kWh dell'ultima ricarica prima del viaggio, nella tua valuta).
 - **Ricariche** — sessioni con rilevamento AC/DC, energia aggiunta, potenza e grafico di distribuzione.
 - **🆕 Prezzi di ricarica** — prezzo fisso 24h o **fasce orarie**: prezzi per fascia, per **giorno della settimana** e per tipo di ricarica, e ogni sessione viene calcolata correttamente (energia ripartita tra le fasce attraversate dalla curva di potenza reale).
 - **Wallbox (opzionale)** — abbina una wallbox già presente in Home Assistant per vedere potenza/stato di carica live, impostare la corrente max e confrontare l'**AC erogato dalla wallbox** con il **DC entrato in batteria** per sessione, col rendimento di carica.

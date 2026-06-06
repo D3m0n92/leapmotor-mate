@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
+import capability_profile
+
 log = logging.getLogger(__name__)
 
 _DISC = "homeassistant"  # HA discovery prefix
@@ -17,7 +19,7 @@ _DISC = "homeassistant"  # HA discovery prefix
 
 class MqttService:
     def __init__(self, broker, port, username=None, password=None, topic_prefix="leapmotor",
-                 use_tls=False, tls_insecure=False, discovery_enabled=True):
+                 use_tls=False, tls_insecure=False, discovery_enabled=True, get_setting=None):
         self.broker = broker
         self.port = int(port) if port else (8883 if use_tls else 1883)
         self.username = username
@@ -26,6 +28,7 @@ class MqttService:
         self.use_tls = use_tls
         self.tls_insecure = tls_insecure
         self.discovery_enabled = discovery_enabled
+        self.get_setting = get_setting   # db.get_setting — for per-VIN capability gating
         self.client = None
         self.on_command = None          # callback(vin, command_or_entity, value)
         self._discovery_sent = False
@@ -133,6 +136,10 @@ class MqttService:
         pub("door_rear_left", data.door_rear_left_open); pub("door_rear_right", data.door_rear_right_open)
         pub("window_fl", data.window_fl_open);  pub("window_fr", data.window_fr_open)
         pub("window_rl", data.window_rl_open);  pub("window_rr", data.window_rr_open)
+        pub("seat_heat_driver", data.seat_heat_driver);     pub("seat_heat_passenger", data.seat_heat_passenger)
+        pub("seat_vent_driver", data.seat_vent_driver);     pub("seat_vent_passenger", data.seat_vent_passenger)
+        pub("steering_heat", data.steering_heat)
+        pub("mirror_heat_left", data.mirror_heat_left);     pub("mirror_heat_right", data.mirror_heat_right)
         pub("last_seen", datetime.now(timezone.utc).isoformat())
         self.client.publish(f"{base}/location",
                             json.dumps({"latitude": data.latitude, "longitude": data.longitude}),
@@ -197,6 +204,23 @@ class MqttService:
             if "icon" in extra: c["icon"] = extra["icon"]
             cfg("sensor", key, c)
 
+        # Comfort STATE sensors — read-only, shown only where they work on THIS car (the B10
+        # reports these even though the matching remote commands are broken). A confirmed-broken
+        # one gets its retained config cleared so HA drops it.
+        for key, name, feat, icon in [
+            ("seat_heat_driver",    "Seat Heating Driver",       "seat_heat",     "mdi:car-seat-heater"),
+            ("seat_heat_passenger", "Seat Heating Passenger",    "seat_heat",     "mdi:car-seat-heater"),
+            ("seat_vent_driver",    "Seat Ventilation Driver",   "seat_vent",     "mdi:car-seat-cooler"),
+            ("seat_vent_passenger", "Seat Ventilation Passenger","seat_vent",     "mdi:car-seat-cooler"),
+            ("steering_heat",       "Steering Wheel Heat",       "steering_heat", "mdi:steering"),
+            ("mirror_heat_left",    "Mirror Heating Left",       "mirror_heat",   "mdi:car-side"),
+            ("mirror_heat_right",   "Mirror Heating Right",      "mirror_heat",   "mdi:car-side"),
+        ]:
+            if capability_profile.is_shown(vin, feat, self.get_setting):
+                cfg("sensor", key, {"name": name, "state_topic": f"{prefix}/{vin}/{key}", "icon": icon})
+            else:
+                self.client.publish(f"{_DISC}/sensor/{device_id}/{key}/config", "", retain=True)
+
         binaries = [
             ("charging", "Charging", "battery_charging"), ("locked", "Locked", "lock"),
             ("plug_connected", "Plug Connected", "plug"), ("climate_on", "Climate", "power"),
@@ -229,8 +253,14 @@ class MqttService:
             ("climate_defrost", "Defrost", "mdi:car-defrost-front"),
             ("climate_off", "A/C Off", "mdi:snowflake-off"),
         ]:
-            cfg("button", key, {"name": name, "command_topic": f"{prefix}/{vin}/command",
-                                "payload_press": key, "icon": icon})
+            # Model-aware: hide command buttons confirmed broken on THIS car (e.g. A/C Off on
+            # the B10). Clearing the retained config makes HA drop a button that was published
+            # before it was classified as broken. Unknown/working commands are always shown.
+            if capability_profile.command_shown(vin, key, self.get_setting):
+                cfg("button", key, {"name": name, "command_topic": f"{prefix}/{vin}/command",
+                                    "payload_press": key, "icon": icon})
+            else:
+                self.client.publish(f"{_DISC}/button/{device_id}/{key}/config", "", retain=True)
 
         # The old single "Climate" switch is deprecated in favour of the buttons above
         # (a plain switch can't model cool/heat/defrost and its OFF was a no-op). Clear

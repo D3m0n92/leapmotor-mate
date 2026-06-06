@@ -2,6 +2,15 @@
 
 _T: dict[str, dict[str, str]] = {
     "en": {
+        # Comfort — read-only state sensors (work on B10 even where the command doesn't)
+        "comfort_section":       "Comfort",
+        "comfort_seat_heat_driver":      "Driver seat heat",
+        "comfort_seat_heat_passenger":   "Passenger seat heat",
+        "comfort_seat_vent_driver":      "Driver seat vent",
+        "comfort_seat_vent_passenger":   "Passenger seat vent",
+        "comfort_steering_heat":         "Steering heat",
+        "comfort_mirror_heat_left":      "Left mirror heat",
+        "comfort_mirror_heat_right":     "Right mirror heat",
         # Nav
         "nav_overview":    "Overview",
         "nav_map":         "Map",
@@ -294,7 +303,9 @@ _T: dict[str, dict[str, str]] = {
         "open_trunk_confirm":   "Open trunk?",
         "climate":              "Climate",
         "climate_on_state":     "● On",
+        "clim_on_confirm":      "Note: once on, Mate can't fully turn the climate off — you'll need the Leapmotor app, or do it in the car. Turn it on?",
         "climate_off_state":    "○ Off",
+        "clim_off_note":        "Heads-up: turning a function off returns the climate to its base mode — it does not fully power off the A/C. To switch the climate off completely, use the Leapmotor app or do it manually in the car.",
         "btn_ac_on":            "❄️ A/C On",
         "btn_cool":             "🧊 Cool",
         "btn_heat":             "🔥 Heat",
@@ -433,6 +444,15 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "it": {
+        # Comfort — sensori di stato in sola lettura
+        "comfort_section":       "Comfort",
+        "comfort_seat_heat_driver":      "Risc. sedile guida",
+        "comfort_seat_heat_passenger":   "Risc. sedile pass.",
+        "comfort_seat_vent_driver":      "Vent. sedile guida",
+        "comfort_seat_vent_passenger":   "Vent. sedile pass.",
+        "comfort_steering_heat":         "Risc. volante",
+        "comfort_mirror_heat_left":      "Risc. specchio sx",
+        "comfort_mirror_heat_right":     "Risc. specchio dx",
         # Nav
         "nav_overview":    "Panoramica",
         "nav_map":         "Mappa",
@@ -725,7 +745,9 @@ _T: dict[str, dict[str, str]] = {
         "open_trunk_confirm":   "Aprire il bagagliaio?",
         "climate":              "Climatizzatore",
         "climate_on_state":     "● Acceso",
+        "clim_on_confirm":      "Nota: una volta acceso, da Mate non puoi spegnere del tutto il clima — dovrai usare l'app Leapmotor o disattivarlo in auto. Accendere?",
         "climate_off_state":    "○ Spento",
+        "clim_off_note":        "Nota bene: spegnere una funzione riporta il climatizzatore alla modalità base — non spegne del tutto l'A/C. Per spegnere completamente il clima, usa l'app Leapmotor o disattivalo manualmente in auto.",
         "btn_ac_on":            "❄️ A/C Acceso",
         "btn_cool":             "🧊 Raffredda",
         "btn_heat":             "🔥 Riscalda",
@@ -864,6 +886,15 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "fr": {
+        # Comfort — capteurs d'état en lecture seule
+        "comfort_section":       "Confort",
+        "comfort_seat_heat_driver":      "Chauf. siège cond.",
+        "comfort_seat_heat_passenger":   "Chauf. siège pass.",
+        "comfort_seat_vent_driver":      "Vent. siège cond.",
+        "comfort_seat_vent_passenger":   "Vent. siège pass.",
+        "comfort_steering_heat":         "Chauf. volant",
+        "comfort_mirror_heat_left":      "Chauf. rétro. g.",
+        "comfort_mirror_heat_right":     "Chauf. rétro. d.",
         # Nav
         "nav_overview":    "Aperçu",
         "nav_map":         "Carte",
@@ -1156,7 +1187,9 @@ _T: dict[str, dict[str, str]] = {
         "open_trunk_confirm":   "Ouvrir le coffre ?",
         "climate":              "Climatisation",
         "climate_on_state":     "● Activée",
+        "clim_on_confirm":      "Note : une fois activée, Mate ne peut pas éteindre complètement la climatisation — vous devrez utiliser l'application Leapmotor ou le faire dans la voiture. Activer ?",
         "climate_off_state":    "○ Désactivée",
+        "clim_off_note":        "À noter : désactiver une fonction ramène la climatisation au mode de base — cela n'éteint pas complètement la clim. Pour couper totalement la climatisation, utilisez l'application Leapmotor ou faites-le manuellement dans la voiture.",
         "btn_ac_on":            "❄️ Clim activée",
         "btn_cool":             "🧊 Refroidir",
         "btn_heat":             "🔥 Chauffer",
@@ -1295,6 +1328,15 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "de": {
+        # Comfort — schreibgeschützte Zustandssensoren
+        "comfort_section":       "Komfort",
+        "comfort_seat_heat_driver":      "Sitzhzg. Fahrer",
+        "comfort_seat_heat_passenger":   "Sitzhzg. Beifahrer",
+        "comfort_seat_vent_driver":      "Sitzlüft. Fahrer",
+        "comfort_seat_vent_passenger":   "Sitzlüft. Beifahrer",
+        "comfort_steering_heat":         "Lenkradhzg.",
+        "comfort_mirror_heat_left":      "Spiegelhzg. li.",
+        "comfort_mirror_heat_right":     "Spiegelhzg. re.",
         # Nav
         "nav_overview":    "Übersicht",
         "nav_map":         "Karte",
@@ -1587,7 +1629,9 @@ _T: dict[str, dict[str, str]] = {
         "open_trunk_confirm":   "Kofferraum öffnen?",
         "climate":              "Klima",
         "climate_on_state":     "● An",
+        "clim_on_confirm":      "Hinweis: Einmal eingeschaltet, kann Mate die Klimaanlage nicht mehr vollständig ausschalten — dazu brauchst du die Leapmotor-App oder das Fahrzeug. Einschalten?",
         "climate_off_state":    "○ Aus",
+        "clim_off_note":        "Hinweis: Das Ausschalten einer Funktion setzt die Klimaanlage in den Basismodus zurück — sie wird dabei nicht vollständig ausgeschaltet. Um die Klimaanlage komplett auszuschalten, nutze die Leapmotor-App oder schalte sie manuell im Fahrzeug aus.",
         "btn_ac_on":            "❄️ Klima an",
         "btn_cool":             "🧊 Kühlen",
         "btn_heat":             "🔥 Heizen",

@@ -1,4 +1,5 @@
 """LeapMotor Mate — vehicle data poller."""
+import json
 import logging
 import os
 import pathlib
@@ -95,6 +96,28 @@ def _handle_mqtt_command(client, service, db, vin: str, cmd: str, value):
         log.warning("MQTT: boost trigger failed: %s", exc)
 
 
+_last_comfort = {}  # vin -> last comfort_state JSON written (skip redundant settings writes)
+
+
+def _write_comfort_state(db, data):
+    """Persist the working comfort STATE sensors (seat/steering/mirror heat) as a small JSON
+    in settings, so the web UI — which reads the positions row, not raw signals — can show
+    them read-only. The matching remote commands are broken on the B10, but these states are
+    real and reflect manual activation. Written only when the value changes."""
+    state = {"seat_heat_driver": data.seat_heat_driver,
+             "seat_heat_passenger": data.seat_heat_passenger,
+             "seat_vent_driver": data.seat_vent_driver,
+             "seat_vent_passenger": data.seat_vent_passenger,
+             "steering_heat": data.steering_heat,
+             "mirror_heat_left": data.mirror_heat_left,
+             "mirror_heat_right": data.mirror_heat_right}
+    blob = json.dumps(state, separators=(",", ":"))
+    if _last_comfort.get(data.vin) == blob:
+        return
+    db.set_setting(f"comfort_state_{data.vin.lower()}", blob)
+    _last_comfort[data.vin] = blob
+
+
 def _mqtt_tick(db, client, data, service):
     """Manage the MQTT bridge each poll cycle: (dis)connect on the enable flag,
     then publish the current state. Returns the (possibly new/None) service."""
@@ -112,6 +135,7 @@ def _mqtt_tick(db, client, data, service):
             use_tls=db.get_setting("mqtt_tls") == "1",
             tls_insecure=db.get_setting("mqtt_tls_insecure") == "1",
             discovery_enabled=db.get_setting("mqtt_discovery", "1") == "1",
+            get_setting=db.get_setting,
         )
         service.on_command = lambda vin, cmd, val: _handle_mqtt_command(client, service, db, vin, cmd, val)
     try:
@@ -223,6 +247,7 @@ def main():
             with _API_LOCK:
                 data = client.get_status()
             recorder.process(data)
+            _write_comfort_state(db, data)
 
             # ABRP live telemetry (opt-in, off by default)
             if db.get_setting("abrp_enabled") == "1":

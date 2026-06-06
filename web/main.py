@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 sys.path.insert(0, str(Path(__file__).parent))
 import db_reader
+import capability_profile
 import command_client
 import i18n
 import ha_client
@@ -19,7 +20,7 @@ import geocode
 import mqtt_test
 import auth
 
-MATE_VERSION = "1.10.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.11.2"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -300,12 +301,48 @@ async def map_page(request: Request):
     ))
 
 
+# Comfort tiles to display: (comfort_state key, capability feature that gates it, i18n label, icon).
+# Seats are shown per-side (driver/passenger), mirrors per-side (left/right); gating is at the
+# feature level (e.g. both seat-heat tiles hide together if seat_heat is broken on this car).
+_COMFORT_ROWS = (
+    # (comfort_state key, gating feature, i18n label, icon kind, accent)
+    ("seat_heat_driver",     "seat_heat",     "comfort_seat_heat_driver",     "seat_heat", "heat"),
+    ("seat_heat_passenger",  "seat_heat",     "comfort_seat_heat_passenger",  "seat_heat", "heat"),
+    ("seat_vent_driver",     "seat_vent",     "comfort_seat_vent_driver",     "seat_vent", "vent"),
+    ("seat_vent_passenger",  "seat_vent",     "comfort_seat_vent_passenger",  "seat_vent", "vent"),
+    ("steering_heat",        "steering_heat", "comfort_steering_heat",        "steering",  "heat"),
+    ("mirror_heat_left",     "mirror_heat",   "comfort_mirror_heat_left",     "mirror",    "heat"),
+    ("mirror_heat_right",    "mirror_heat",   "comfort_mirror_heat_right",     "mirror",    "heat"),
+)
+
+
+def _comfort_rows(vin):
+    """Read-only comfort STATE sensors for the Commands page. The poller writes the live
+    values to settings as `comfort_state_<vin>`; we show only the ones not confirmed broken
+    on this car (the remote command may be broken even when the state sensor works)."""
+    if not vin:
+        return []
+    raw = db_reader.get_setting(f"comfort_state_{vin.lower()}", "")
+    try:
+        state = json.loads(raw) if raw else {}
+    except ValueError:
+        state = {}
+    rows = []
+    for skey, feat, label_key, icon, accent in _COMFORT_ROWS:
+        if not capability_profile.is_shown(vin, feat):
+            continue
+        v = int(state.get(skey) or 0)
+        rows.append({"icon": icon, "accent": accent, "label_key": label_key, "value": v, "on": v > 0})
+    return rows
+
+
 @app.get("/commands", response_class=HTMLResponse)
 async def commands(request: Request):
     vehicle, _ = db_reader.get_vehicle()
     status = db_reader.get_latest_status()
+    comfort = _comfort_rows(vehicle.get("vin") if vehicle else None)
     return templates.TemplateResponse(request, "commands.html", _ctx(
-        page="commands", vehicle=vehicle, status=status,
+        page="commands", vehicle=vehicle, status=status, comfort=comfort,
     ))
 
 
@@ -1073,7 +1110,9 @@ _COMMANDS = {
 @app.get("/api/cmd-grid", response_class=HTMLResponse)
 async def cmd_grid(request: Request):
     status = db_reader.get_latest_status()
-    return templates.TemplateResponse(request, "partials/cmd_grid.html", _ctx(status=status))
+    vehicle, _ = db_reader.get_vehicle()
+    comfort = _comfort_rows(vehicle.get("vin") if vehicle else None)
+    return templates.TemplateResponse(request, "partials/cmd_grid.html", _ctx(status=status, comfort=comfort))
 
 
 @app.post("/api/poll-settings", response_class=HTMLResponse)

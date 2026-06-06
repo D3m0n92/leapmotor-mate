@@ -58,6 +58,15 @@ class VehicleData:
     tire_fr_bar: float = 0.0
     tire_rl_bar: float = 0.0
     tire_rr_bar: float = 0.0
+    # Comfort STATE sensors (read-only). They reflect reality on the B10 even though the
+    # matching remote COMMANDS don't actuate (see capability_profile). 0 = off, >0 = level/on.
+    seat_heat_driver: int = 0       # signal 2100 driverSeatHeating
+    seat_heat_passenger: int = 0    # signal 2118 passengerSeatHeating
+    seat_vent_driver: int = 0       # signal 2101 driverSeatVentilation
+    seat_vent_passenger: int = 0    # signal 2119 passengerSeatVentilation
+    steering_heat: int = 0          # signal 1816 steeringWheelHeating
+    mirror_heat_left: int = 0       # signal 49 leftMirrorHeating
+    mirror_heat_right: int = 0      # signal 50 rightMirrorHeating
 
     def fingerprint(self) -> tuple:
         """Compact snapshot of signals that indicate car activity."""
@@ -314,6 +323,13 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         remaining_charge_min=int(sig.get("1200") or 0),
         charge_voltage_v=float(sig.get("1177") or 0),
         charge_current_a=float(sig.get("1178") or 0),
+        seat_heat_driver=int(sig.get("2100") or 0),
+        seat_heat_passenger=int(sig.get("2118") or 0),
+        seat_vent_driver=int(sig.get("2101") or 0),
+        seat_vent_passenger=int(sig.get("2119") or 0),
+        steering_heat=int(sig.get("1816") or 0),
+        mirror_heat_left=int(sig.get("49") or 0),
+        mirror_heat_right=int(sig.get("50") or 0),
         door_driver_open=int(sig.get("1277") or 0) != 0,
         door_passenger_open=int(sig.get("1278") or 0) != 0,
         door_rear_left_open=int(sig.get("1279") or 0) != 0,

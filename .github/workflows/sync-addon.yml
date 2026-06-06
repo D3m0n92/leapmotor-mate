@@ -59,7 +59,11 @@ jobs:
         run: |
           sed -i -E "s|^ARG MATE_REF=.*|ARG MATE_REF=${TAG}|" addon/leapmotor_mate/Dockerfile
           sed -i -E "s|^version: .*|version: \"${VERSION}\"|"  addon/leapmotor_mate/config.yaml
-          cp code/CHANGELOG.md addon/leapmotor_mate/CHANGELOG.md
+          # Copy the code CHANGELOG, but tidy it for HA's plain renderer: drop the
+          # Keep-a-Changelog "[x]" brackets from version headings (they're link refs
+          # that HA shows as literal text) and remove the orphan link-def lines.
+          sed -E -e 's/^(## )\[([^]]+)\]/\1\2/' -e '/^\[[0-9][^]]*\]: http/d' \
+            code/CHANGELOG.md > addon/leapmotor_mate/CHANGELOG.md
           echo "Dockerfile : $(grep '^ARG MATE_REF=' addon/leapmotor_mate/Dockerfile)"
           echo "config.yaml: $(grep '^version:'      addon/leapmotor_mate/config.yaml)"
           echo "CHANGELOG  : $(grep -m1 '^## ' addon/leapmotor_mate/CHANGELOG.md)"

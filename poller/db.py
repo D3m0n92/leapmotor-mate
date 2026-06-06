@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS positions (
     trunk_open       INTEGER DEFAULT NULL,
     windows_open     INTEGER DEFAULT NULL,
     sunshade_open    INTEGER DEFAULT NULL,
-    plug_connected   INTEGER DEFAULT NULL
+    plug_connected   INTEGER DEFAULT NULL,
+    ready            INTEGER DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS trips (
@@ -177,6 +178,8 @@ class Database:
             self._conn.execute("ALTER TABLE positions ADD COLUMN charge_voltage_v REAL DEFAULT NULL")
         if "charge_current_a" not in cols:
             self._conn.execute("ALTER TABLE positions ADD COLUMN charge_current_a REAL DEFAULT NULL")
+        if "ready" not in cols:
+            self._conn.execute("ALTER TABLE positions ADD COLUMN ready INTEGER DEFAULT NULL")
         self._conn.commit()
         self.migrate_secrets()
         self._check_decryption()
@@ -294,8 +297,8 @@ class Database:
                 range_km, gear, charging, is_locked, climate_on,
                 climate_cooling, climate_heating, climate_defrost,
                 trunk_open, windows_open, sunshade_open, plug_connected,
-                remaining_charge_min, charge_voltage_v, charge_current_a)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                remaining_charge_min, charge_voltage_v, charge_current_a, ready)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 vehicle_id, _now_iso(),
                 data.latitude, data.longitude, data.speed_kmh, data.odometer_km,
@@ -314,6 +317,7 @@ class Database:
                 data.remaining_charge_min or None,
                 data.charge_voltage_v or None,
                 data.charge_current_a or None,
+                1 if data.ready else 0,
             ),
         )
         self._conn.commit()

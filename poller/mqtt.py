@@ -250,8 +250,22 @@ class MqttService:
             # single on/off toggle, only distinct mode commands + ac_switch to deactivate.
             ("climate_cool", "Quick Cool", "mdi:snowflake"),
             ("climate_heat", "Quick Heat", "mdi:fire"),
+            ("climate_vent", "Quick Ventilation", "mdi:fan"),
             ("climate_defrost", "Defrost", "mdi:car-defrost-front"),
             ("climate_off", "A/C Off", "mdi:snowflake-off"),
+            # Comfort — model-aware (gated by capability; B10 now supported via kerniger payloads).
+            ("steering_heat_on", "Steering Heat On", "mdi:steering"),
+            ("steering_heat_off", "Steering Heat Off", "mdi:steering"),
+            ("mirror_heat_on", "Mirror Heat On", "mdi:mirror-rectangle"),
+            ("mirror_heat_off", "Mirror Heat Off", "mdi:mirror-rectangle"),
+            ("seat_heat_driver_on", "Driver Seat Heat On", "mdi:car-seat-heater"),
+            ("seat_heat_driver_off", "Driver Seat Heat Off", "mdi:car-seat-heater"),
+            ("seat_heat_passenger_on", "Passenger Seat Heat On", "mdi:car-seat-heater"),
+            ("seat_heat_passenger_off", "Passenger Seat Heat Off", "mdi:car-seat-heater"),
+            ("seat_vent_driver_on", "Driver Seat Vent On", "mdi:car-seat-cooler"),
+            ("seat_vent_driver_off", "Driver Seat Vent Off", "mdi:car-seat-cooler"),
+            ("seat_vent_passenger_on", "Passenger Seat Vent On", "mdi:car-seat-cooler"),
+            ("seat_vent_passenger_off", "Passenger Seat Vent Off", "mdi:car-seat-cooler"),
         ]:
             # Model-aware: hide command buttons confirmed broken on THIS car (e.g. A/C Off on
             # the B10). Clearing the retained config makes HA drop a button that was published

@@ -3,7 +3,20 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.11.4] — Unreleased
+## [1.11.4] — 2026-06-06
+
+### Added
+- **Full comfort controls on the B10** (thanks @kerniger, leapmotor-ha#41, payloads captured from the app):
+  - **Heated & ventilated seats** — a per-seat **level slider (off / 1 / 2 / 3)** for driver & passenger,
+    colour-accented (heat = amber, ventilation = sky-blue). Payload `{"position":"driver|copilot","level":"0..3"}`.
+  - **Heated steering wheel** and **heated mirrors** — on/off toggles on the Comfort card.
+- **More climate controls.** The Climate card adds a **Rapid Ventilation** tile and a **temperature stepper
+  (18–32 °C)** that sets the target and starts the climate (auto cool/heat vs the cabin temp). Everything runs
+  through the cars' single climate command (cmd 170).
+- **READY indicator.** The Overview battery card now shows the car's **READY / Not Ready** state, from the
+  faithful B10 signal `bcmKeyPositionOn3` (1258) — driven only by the physical key/READY.
+- **Home Assistant (MQTT).** The new comfort & climate commands (seat heat/vent on/off per seat, steering &
+  mirror heating, rapid ventilation) are exposed as model-aware buttons over MQTT discovery.
 
 ### Changed
 - **Tyre pressure — status label per wheel.** Each wheel tile on the Vehicle page now shows a

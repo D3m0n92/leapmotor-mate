@@ -1,5 +1,6 @@
 """Persistent Leapmotor session — login once, reuse for all commands and status fetches."""
 import os
+import json
 import time
 import logging
 import threading
@@ -341,6 +342,22 @@ def ac_off():            return _session.execute(lambda api, vin: api.ac_switch(
 def quick_cool():        return _session.execute(lambda api, vin: api.quick_cool(vin))
 def quick_heat():        return _session.execute(lambda api, vin: api.quick_heat(vin))
 def windshield_defrost():return _session.execute(lambda api, vin: api.windshield_defrost(vin))
+# Rapid ventilation + temperature: the whole climate is cmd 170 (kerniger payload). "ac_on"
+# maps to cmd 170. mode wind = pure ventilation; temperature field sets the target & starts the climate.
+def quick_vent():
+    body = json.dumps({"circle": "in", "mode": "wind", "operate": "manual", "position": "all",
+                       "temperature": "26", "windlevel": "7", "wshld": "0"}, separators=(",", ":"))
+    return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="ac_on", cmd_content=body))
+def set_climate_temp(temp, inside=None):
+    """Set target temp 18–32 °C. Auto mode: cool if cabin warmer than target, heat if cooler, else vent."""
+    try:
+        t = max(18, min(int(round(float(temp))), 32))
+    except (TypeError, ValueError):
+        return False, "bad temp"
+    mode = "cold" if (inside is not None and inside > t) else ("hot" if (inside is not None and inside < t) else "wind")
+    body = json.dumps({"circle": "in", "mode": mode, "operate": "manual", "position": "all",
+                       "temperature": str(t), "windlevel": "5", "wshld": "0"}, separators=(",", ":"))
+    return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="ac_on", cmd_content=body))
 def open_windows():      return _session.execute(lambda api, vin: api.open_windows(vin, value="2"))
 def close_windows():     return _session.execute(lambda api, vin: api.close_windows(vin, value="0"))
 def battery_preheat():   return _session.execute(lambda api, vin: api.battery_preheat(vin))
@@ -355,15 +372,27 @@ def close_sunshade():    return _session.execute(lambda api, vin: api.close_suns
 def unlock_charger():    return _session.execute(lambda api, vin: api.unlock_charger(vin))
 def sentry_on():         return _session.execute(lambda api, vin: api.sentry_mode_on(vin))
 def sentry_off():        return _session.execute(lambda api, vin: api.sentry_mode_off(vin))
-def steering_heat_on():  return _session.execute(lambda api, vin: api.steering_wheel_heat_on(vin))
-def steering_heat_off(): return _session.execute(lambda api, vin: api.steering_wheel_heat_off(vin))
-def mirror_heat_on():    return _session.execute(lambda api, vin: api.rearview_mirror_heat_on(vin))
-def mirror_heat_off():   return _session.execute(lambda api, vin: api.rearview_mirror_heat_off(vin))
-# Seats: position 1=driver, 2=front passenger; level 0=off, 3=max.
-def seat_heat_driver_on():  return _session.execute(lambda api, vin: api.seat_heat(vin, position=1, level=3))
-def seat_heat_driver_off(): return _session.execute(lambda api, vin: api.seat_heat(vin, position=1, level=0))
-def seat_vent_driver_on():  return _session.execute(lambda api, vin: api.seat_ventilation(vin, position=1, level=3))
-def seat_vent_driver_off(): return _session.execute(lambda api, vin: api.seat_ventilation(vin, position=1, level=0))
+# Steering / mirror heat — kerniger 0.6.11 payloads (B10-verified): level/value 1=off, 2=on.
+def steering_heat_on():  return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="steering_wheel_heat", cmd_content='{"level":"2"}'))
+def steering_heat_off(): return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="steering_wheel_heat", cmd_content='{"level":"1"}'))
+def mirror_heat_on():    return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="rearview_mirror_heat", cmd_content='{"value":"2"}'))
+def mirror_heat_off():   return _session.execute(lambda api, vin: api._remote_control(vin=vin, action="rearview_mirror_heat", cmd_content='{"value":"1"}'))
+# Seats — kerniger/leapmotor-ha#41: the WORKING payload (B10+C10) is
+# {"position":"driver"|"copilot","level":"0..3"}, NOT the lib's old {"value":"pos,level"}.
+# Send it raw via _remote_control. level: 0=off, 1..3 = the three fan/heat speeds.
+_SEAT_ACTION = {"heat": "seat_heat", "vent": "seat_ventilation"}
+def seat_comfort(func, position, level):
+    """func: 'heat'|'vent'; position: 'driver'|'copilot'; level: 0..3 (0=off)."""
+    action = _SEAT_ACTION.get(func)
+    if not action or position not in ("driver", "copilot"):
+        return False, "bad seat args"
+    lvl = max(0, min(int(level), 3))
+    body = json.dumps({"position": position, "level": str(lvl)}, separators=(",", ":"))
+    return _session.execute(lambda api, vin: api._remote_control(vin=vin, action=action, cmd_content=body))
+def seat_heat_driver_on():   return seat_comfort("heat", "driver", 3)
+def seat_heat_driver_off():  return seat_comfort("heat", "driver", 0)
+def seat_vent_driver_on():   return seat_comfort("vent", "driver", 3)
+def seat_vent_driver_off():  return seat_comfort("vent", "driver", 0)
 def send_destination(name, address, lat, lon):
     """Push a navigation destination to the car (cmd_id 180, no PIN)."""
     return _session.execute(lambda api, vin: api.send_destination(

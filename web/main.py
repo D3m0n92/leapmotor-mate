@@ -310,10 +310,19 @@ _COMFORT_ROWS = (
     ("seat_heat_passenger",  "seat_heat",     "comfort_seat_heat_passenger",  "seat_heat", "heat"),
     ("seat_vent_driver",     "seat_vent",     "comfort_seat_vent_driver",     "seat_vent", "vent"),
     ("seat_vent_passenger",  "seat_vent",     "comfort_seat_vent_passenger",  "seat_vent", "vent"),
-    ("steering_heat",        "steering_heat", "comfort_steering_heat",        "steering",  "heat"),
     ("mirror_heat_left",     "mirror_heat",   "comfort_mirror_heat_left",     "mirror",    "heat"),
     ("mirror_heat_right",    "mirror_heat",   "comfort_mirror_heat_right",     "mirror",    "heat"),
+    ("steering_heat",        "steering_heat", "comfort_steering_heat",        "steering",  "heat"),  # last → mirrors stay paired on mobile
 )
+
+# Comfort rows controllable as a simple on/off toggle (steering/mirror — no level on the car).
+# skey -> (gating command feature, on-command key, off-command key). Both mirror tiles share the
+# single mirror command. Seats are handled separately (level slider).
+_COMFORT_TOGGLE = {
+    "steering_heat":     ("steering_heat_cmd", "steering_heat_on", "steering_heat_off"),
+    "mirror_heat_left":  ("mirror_heat_cmd",   "mirror_heat_on",   "mirror_heat_off"),
+    "mirror_heat_right": ("mirror_heat_cmd",   "mirror_heat_on",   "mirror_heat_off"),
+}
 
 
 def _comfort_rows(vin):
@@ -332,8 +341,44 @@ def _comfort_rows(vin):
         if not capability_profile.is_shown(vin, feat):
             continue
         v = int(state.get(skey) or 0)
-        rows.append({"icon": icon, "accent": accent, "label_key": label_key, "value": v, "on": v > 0})
+        row = {"icon": icon, "accent": accent, "label_key": label_key, "value": v,
+               "on": v > 0, "control": None, "skey": skey}
+        # Seats → level slider (0–3); steering/mirror → on/off toggle. Gated by the command capability.
+        if skey.startswith("seat_"):
+            _, func, side = skey.split("_", 2)        # func: heat|vent, side: driver|passenger
+            if capability_profile.is_shown(vin, f"seat_{func}_cmd"):
+                row.update(control="slider", func=func,
+                           position=("driver" if side == "driver" else "copilot"))
+        elif skey in _COMFORT_TOGGLE:
+            cfeat, cmd_on, cmd_off = _COMFORT_TOGGLE[skey]
+            if capability_profile.is_shown(vin, cfeat):
+                row.update(control="toggle", cmd_on=cmd_on, cmd_off=cmd_off)
+        rows.append(row)
     return rows
+
+
+# Optimistic comfort state: comfort_state is otherwise only written at poll time (~30 s), so the
+# cmd-grid auto-refresh (5–15 s after a command) re-rendered comfort controls with the OLD value,
+# making them appear to "revert". After a web comfort command we merge the expected sensor values
+# so the refresh shows the action immediately; the next poll overwrites with the real values.
+_COMFORT_CMD_OPTIMISTIC = {
+    "steering_heat_on":  {"steering_heat": 2},
+    "steering_heat_off": {"steering_heat": 0},
+    "mirror_heat_on":    {"mirror_heat_left": 1, "mirror_heat_right": 1},
+    "mirror_heat_off":   {"mirror_heat_left": 0, "mirror_heat_right": 0},
+}
+
+
+def _optimistic_comfort(vin, updates):
+    if not vin or not updates:
+        return
+    key = f"comfort_state_{vin.lower()}"
+    try:
+        cur = json.loads(db_reader.get_setting(key, "") or "{}")
+    except ValueError:
+        cur = {}
+    cur.update(updates)
+    db_reader.set_setting(key, json.dumps(cur, separators=(",", ":")))
 
 
 @app.get("/commands", response_class=HTMLResponse)
@@ -1086,6 +1131,7 @@ _COMMANDS = {
     "ac_off":            command_client.ac_off,
     "quick_cool":        command_client.quick_cool,
     "quick_heat":        command_client.quick_heat,
+    "quick_vent":        command_client.quick_vent,
     "windshield_defrost":command_client.windshield_defrost,
     "open_windows":      command_client.open_windows,
     "close_windows":     command_client.close_windows,
@@ -1119,6 +1165,45 @@ async def cmd_grid(request: Request):
         status=status, comfort=comfort,
         ac_off_shown=capability_profile.command_shown(vin, "climate_off"),
     ))
+
+
+@app.post("/api/seat/{func}/{position}", response_class=HTMLResponse)
+async def set_seat(request: Request, func: str, position: str):
+    """Seat heat/vent level (0–3) via the kerniger payload. The slider posts ?level=N."""
+    form = await request.form()
+    try:
+        level = int(form.get("level", 0))
+    except (TypeError, ValueError):
+        level = 0
+    import asyncio
+    ok, msg = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: command_client.seat_comfort(func, position, level))
+    if ok:
+        side = "driver" if position == "driver" else "passenger"
+        _veh, _ = db_reader.get_vehicle()
+        _optimistic_comfort(_veh.get("vin") if _veh else None,
+                            {f"seat_{func}_{side}": max(0, min(level, 3))})
+        _t = i18n.get_t(db_reader.get_language())
+        txt = f"{_t('lvl_abbr')} {level}" if level > 0 else _t('lvl_off')
+        return HTMLResponse(f'<span style="color:#22c55e">✓ {txt}</span>')
+    return HTMLResponse(f'<span style="color:#ef4444">✗ {msg}</span>')
+
+
+@app.post("/api/climate-temp", response_class=HTMLResponse)
+async def set_climate_temp_api(request: Request):
+    """Set the climate target temperature (18–32 °C); auto-picks cool/heat vs the cabin temp."""
+    form = await request.form()
+    try:
+        temp = int(form.get("temp", 0))
+    except (TypeError, ValueError):
+        return HTMLResponse('<span style="color:#ef4444">✗</span>', status_code=400)
+    inside = (db_reader.get_latest_status() or {}).get("inside_temp")
+    import asyncio
+    ok, msg = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: command_client.set_climate_temp(temp, inside))
+    if ok:
+        return HTMLResponse(f'<span style="color:#22c55e">✓ {max(18, min(temp, 32))}°C</span>')
+    return HTMLResponse(f'<span style="color:#ef4444">✗ {msg}</span>')
 
 
 @app.post("/api/poll-settings", response_class=HTMLResponse)
@@ -1269,6 +1354,7 @@ _CLIMATE_TILES = {
     "ac_on":              "climate_on",
     "quick_cool":         "climate_cooling",
     "quick_heat":         "climate_heating",
+    "quick_vent":         "climate_venting",
     "windshield_defrost": "climate_defrost",
 }
 
@@ -1345,6 +1431,9 @@ async def run_command(name: str, background_tasks: BackgroundTasks):
     import asyncio
     ok, msg = await asyncio.get_event_loop().run_in_executor(None, fn)
     if ok:
+        if name in _COMFORT_CMD_OPTIMISTIC:
+            _veh, _ = db_reader.get_vehicle()
+            _optimistic_comfort(_veh.get("vin") if _veh else None, _COMFORT_CMD_OPTIMISTIC[name])
         if overrides:
             db_reader.write_optimistic_status(overrides)
         # Climate commands take several seconds to reflect in signals → show the

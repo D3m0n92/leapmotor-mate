@@ -67,6 +67,7 @@ class VehicleData:
     steering_heat: int = 0          # signal 1816 steeringWheelHeating
     mirror_heat_left: int = 0       # signal 49 leftMirrorHeating
     mirror_heat_right: int = 0      # signal 50 rightMirrorHeating
+    ready: bool = False             # signal 1258 bcmKeyPositionOn3 — faithful READY/ON3 (physical key only)
 
     def fingerprint(self) -> tuple:
         """Compact snapshot of signals that indicate car activity."""
@@ -344,4 +345,5 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         tire_fr_bar=round(float(sig.get("2653") or 0) / 100.0, 2),
         tire_rl_bar=round(float(sig.get("2646") or 0) / 100.0, 2),
         tire_rr_bar=round(float(sig.get("2660") or 0) / 100.0, 2),
+        ready=int(sig.get("1258") or 0) == 1,   # B10 faithful READY (ON3) sensor
     )

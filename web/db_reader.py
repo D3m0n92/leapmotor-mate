@@ -598,6 +598,9 @@ def get_latest_status() -> Optional[dict]:
         d["charge_power_kw"] = round(abs(cur_a * volt_v) / 1000.0, 2)
     else:
         d["charge_power_kw"] = 0.0
+    # Derived "ventilating" = climate on but neither cooling, heating nor defrosting (wind mode).
+    d["climate_venting"] = bool(d.get("climate_on")) and not d.get("climate_cooling") \
+        and not d.get("climate_heating") and not d.get("climate_defrost")
     # How long ago
     try:
         ts = datetime.fromisoformat(d["recorded_at"])

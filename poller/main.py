@@ -31,6 +31,17 @@ _MQTT_OPTIMISTIC = {
     "open_trunk":  ("trunk_open", True),
     "close_trunk": ("trunk_open", False),
 }
+# Seat comfort MQTT buttons → (action, position, level). on=level 3, off=level 0 (kerniger payload).
+_SEAT_MQTT = {
+    "seat_heat_driver_on":     ("seat_heat", "driver", 3),
+    "seat_heat_driver_off":    ("seat_heat", "driver", 0),
+    "seat_heat_passenger_on":  ("seat_heat", "copilot", 3),
+    "seat_heat_passenger_off": ("seat_heat", "copilot", 0),
+    "seat_vent_driver_on":     ("seat_ventilation", "driver", 3),
+    "seat_vent_driver_off":    ("seat_ventilation", "driver", 0),
+    "seat_vent_passenger_on":  ("seat_ventilation", "copilot", 3),
+    "seat_vent_passenger_off": ("seat_ventilation", "copilot", 0),
+}
 _MQTT_BOOST_S = 60   # after a command, poll fast for a minute so the state syncs quickly
 
 # The MQTT command handler runs on paho's network thread while the poll loop runs on the
@@ -68,6 +79,22 @@ def _handle_mqtt_command(client, service, db, vin: str, cmd: str, value):
                 if getattr(service, "last_climate_on", None) is False:
                     return
                 api.ac_switch(vin, params={"operate": "off"});  optimistic = ("climate_on", False)
+            elif cmd == "climate_vent":
+                api._remote_control(vin=vin, action="ac_on",
+                    cmd_content='{"circle":"in","mode":"wind","operate":"manual","position":"all","temperature":"26","windlevel":"7","wshld":"0"}')
+                optimistic = ("climate_on", True)
+            elif cmd == "steering_heat_on":
+                api._remote_control(vin=vin, action="steering_wheel_heat", cmd_content='{"level":"2"}')
+            elif cmd == "steering_heat_off":
+                api._remote_control(vin=vin, action="steering_wheel_heat", cmd_content='{"level":"1"}')
+            elif cmd == "mirror_heat_on":
+                api._remote_control(vin=vin, action="rearview_mirror_heat", cmd_content='{"value":"2"}')
+            elif cmd == "mirror_heat_off":
+                api._remote_control(vin=vin, action="rearview_mirror_heat", cmd_content='{"value":"1"}')
+            elif cmd in _SEAT_MQTT:
+                action, position, level = _SEAT_MQTT[cmd]
+                api._remote_control(vin=vin, action=action,
+                    cmd_content=json.dumps({"position": position, "level": str(level)}, separators=(",", ":")))
             else:
                 return
         log.info("MQTT: executed command %s %s", cmd, value or "")

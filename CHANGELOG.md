@@ -3,6 +3,12 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.1] — Unreleased
+
+### Added
+- **Total energy consumed per trip.** The trip detail now shows the trip's total **kWh consumed**
+  (next to the efficiency), so you can compare it directly against the regenerated energy. (#18)
+
 ## [1.11.0] — 2026-06-06
 
 ### Added

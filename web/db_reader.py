@@ -727,6 +727,29 @@ def get_trip_detail(trip_id: int) -> Optional[dict]:
     moving = [s for s in speeds if s > 1]
     trip_d["avg_speed_kmh"] = round(sum(moving) / len(moving)) if moving else None
 
+    # ── #18: total energy consumed + trip cost ──────────────────────────────────
+    # Energy consumed = efficiency × distance / 100 (consistent with the stored efficiency).
+    eff = trip_d.get("efficiency_kwh_100km")
+    dist = trip_d.get("distance_km") or 0
+    trip_d["energy_kwh"] = round(eff * dist / 100, 2) if (eff and dist) else None
+    # Cost = trip energy × the €/kWh of the last charge (with a known cost) that ended
+    # before this trip started. Stores the number only — the `money` template filter
+    # formats it with the user's configured currency (multi-currency safe).
+    trip_d["cost"] = None
+    trip_d["cost_per_kwh"] = None
+    if trip_d["energy_kwh"]:
+        rate_row = db.execute(
+            "SELECT cost, energy_added_kwh FROM charges "
+            "WHERE ended_at IS NOT NULL AND ended_at <= ? "
+            "  AND cost IS NOT NULL AND energy_added_kwh > 0 "
+            "ORDER BY ended_at DESC LIMIT 1",
+            (trip["started_at"],),
+        ).fetchone()
+        if rate_row and rate_row["energy_added_kwh"]:
+            rate = rate_row["cost"] / rate_row["energy_added_kwh"]
+            trip_d["cost_per_kwh"] = round(rate, 4)
+            trip_d["cost"] = round(trip_d["energy_kwh"] * rate, 2)
+
     return {
         **trip_d,
         "positions": [dict(p) for p in positions],

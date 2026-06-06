@@ -8,6 +8,9 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - **Total energy consumed per trip.** The trip detail now shows the trip's total **kWh consumed**
   (next to the efficiency), so you can compare it directly against the regenerated energy. (#18)
+- **Per-trip cost.** Each trip now shows its **cost**, computed from the energy consumed × the
+  price per kWh of the last charge before the trip. Currency-aware (formatted with the configured
+  currency). (#18)
 
 ## [1.11.0] — 2026-06-06
 

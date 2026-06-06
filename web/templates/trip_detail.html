@@ -37,13 +37,19 @@
         </div>
         <div>
           <div class="stat-label">{{ t('energy_used') }}</div>
-          {% if trip.efficiency_kwh_100km and trip.distance_km %}
-          <div class="stat-value text-amber-400">{{ "%.1f"|format(trip.efficiency_kwh_100km * trip.distance_km / 100) }}<span class="text-base font-normal text-slate-400"> kWh</span></div>
+          {% if trip.energy_kwh %}
+          <div class="stat-value text-amber-400">{{ "%.1f"|format(trip.energy_kwh) }}<span class="text-base font-normal text-slate-400"> kWh</span></div>
           {% else %}<div class="stat-value text-slate-500">—</div>{% endif %}
         </div>
         <div>
           <div class="stat-label">{{ t('regen') }}</div>
           <div class="stat-value text-green-400">{{ "%.2f"|format(trip.regen_kwh or 0) }}<span class="text-base font-normal text-slate-400"> kWh</span></div>
+        </div>
+        <div>
+          <div class="stat-label">{{ t('cost') }}</div>
+          {% if trip.cost is not none %}
+          <div class="stat-value text-green-400">{{ trip.cost | money }}</div>
+          {% else %}<div class="stat-value text-slate-500">—</div>{% endif %}
         </div>
       </div>
     </div>

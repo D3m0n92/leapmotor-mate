@@ -2,8 +2,10 @@ name: Sync add-on repo
 
 # Keeps the thin add-on repo (ProtossBlaster/leapmotor-mate-addon) in lockstep
 # with this code repo. On every published release it bumps MATE_REF in the
-# add-on Dockerfile and version in config.yaml, then commits + pushes to the
-# add-on repo — so the two repos never drift and users never re-add anything.
+# add-on Dockerfile, the version in config.yaml, AND copies this repo's
+# CHANGELOG.md into the add-on (so the changelog Home Assistant shows in the
+# update dialog never goes stale) — then commits + pushes to the add-on repo,
+# so the two repos never drift and users never re-add anything.
 #
 # Requires a repo secret ADDON_REPO_TOKEN: a token with Contents: write on
 # ProtossBlaster/leapmotor-mate-addon (the default GITHUB_TOKEN cannot push to
@@ -37,25 +39,35 @@ jobs:
           echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
           echo "Syncing add-on to $REF (config version ${REF#v})"
 
+      - name: Checkout code repo (for CHANGELOG) at the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ver.outputs.tag }}
+          path: code
+
       - name: Checkout add-on repo
         uses: actions/checkout@v4
         with:
           repository: ProtossBlaster/leapmotor-mate-addon
           token: ${{ secrets.ADDON_REPO_TOKEN }}
+          path: addon
 
-      - name: Bump MATE_REF and version
+      - name: Bump MATE_REF + version and sync CHANGELOG
         env:
           TAG: ${{ steps.ver.outputs.tag }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          sed -i -E "s|^ARG MATE_REF=.*|ARG MATE_REF=${TAG}|" leapmotor_mate/Dockerfile
-          sed -i -E "s|^version: .*|version: \"${VERSION}\"|"  leapmotor_mate/config.yaml
-          echo "Dockerfile : $(grep '^ARG MATE_REF=' leapmotor_mate/Dockerfile)"
-          echo "config.yaml: $(grep '^version:'      leapmotor_mate/config.yaml)"
+          sed -i -E "s|^ARG MATE_REF=.*|ARG MATE_REF=${TAG}|" addon/leapmotor_mate/Dockerfile
+          sed -i -E "s|^version: .*|version: \"${VERSION}\"|"  addon/leapmotor_mate/config.yaml
+          cp code/CHANGELOG.md addon/leapmotor_mate/CHANGELOG.md
+          echo "Dockerfile : $(grep '^ARG MATE_REF=' addon/leapmotor_mate/Dockerfile)"
+          echo "config.yaml: $(grep '^version:'      addon/leapmotor_mate/config.yaml)"
+          echo "CHANGELOG  : $(grep -m1 '^## ' addon/leapmotor_mate/CHANGELOG.md)"
 
       - name: Commit and push if changed
         env:
           TAG: ${{ steps.ver.outputs.tag }}
+        working-directory: addon
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -64,7 +76,7 @@ jobs:
             echo "Add-on already at \`${TAG}\` — nothing to do." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git add leapmotor_mate/Dockerfile leapmotor_mate/config.yaml
-          git commit -m "release: ${TAG} (MATE_REF=${TAG})"
+          git add leapmotor_mate/Dockerfile leapmotor_mate/config.yaml leapmotor_mate/CHANGELOG.md
+          git commit -m "release: ${TAG} (MATE_REF=${TAG}) + changelog"
           git push
-          echo "Synced add-on repo to \`${TAG}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Synced add-on repo to \`${TAG}\` (incl. changelog)." >> "$GITHUB_STEP_SUMMARY"

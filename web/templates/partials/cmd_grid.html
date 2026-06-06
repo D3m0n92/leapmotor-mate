@@ -89,15 +89,17 @@
   <path d="M4 8c5-2.2 11-2.2 16 0l-1.8 5.2c-4-1.4-8.4-1.4-12.4 0z"/>
   <path d="M12 13.6V18"/><path d="M8.5 21h7"/>
 </svg>
-{% else %}{# seat #}
+{% else %}{# seat (armchair) #}
 <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M7 4v8h7l3 3v5"/><path d="M7 12 5 20"/><path d="M17 20H8"/>
+  <path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/>
+  <path d="M3 11v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v2H7v-2a2 2 0 0 0-4 0Z"/>
+  <path d="M5 18v2"/><path d="M19 18v2"/>
 </svg>
 {% endif %}
 {% endmacro %}
 
 
-<div id="cmd-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div id="cmd-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
 
   <!-- Vehicle controls — climate-style tiles -->
   <div class="card md:col-span-2">
@@ -229,7 +231,7 @@
   </div>
 
   <!-- Climate — 4 toggle, off via ac_switch -->
-  <div class="card md:col-span-2">
+  <div class="card md:col-span-2 lg:col-span-1">
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
         <span class="text-2xl">❄️</span>
@@ -252,12 +254,12 @@
   <!-- Comfort — read-only state sensors (shown only where they work on this car; no buttons,
        because the matching remote commands don't actuate on the B10) -->
   {% if comfort %}
-  <div class="card md:col-span-2">
+  <div class="card md:col-span-2 lg:col-span-1">
     <div class="flex items-center gap-2 mb-3">
       <span class="text-2xl">🛋️</span>
       <span class="font-semibold text-white">{{ t('comfort_section') }}</span>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
       {% for c in comfort %}
       <div class="rounded-lg border p-3 flex items-center gap-3
         {% if c.on %}border-amber-400/40 bg-amber-400/5{% else %}border-slate-700 bg-slate-800/40{% endif %}">

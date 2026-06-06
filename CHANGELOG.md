@@ -3,6 +3,17 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.2] — 2026-06-06
+
+### Added
+- **Climate "turn off" note.** The Commands page **Climate** card now shows a highlighted notice that
+  turning a function off returns the climate to its base mode rather than fully powering the A/C off —
+  to switch it off completely you use the Leapmotor app or do it manually in the car. (Reflects the
+  cloud API's lack of a reliable remote "A/C off"; avoids confusion that the climate "won't turn off".)
+- **Confirmation when turning the climate on.** Pressing a climate **On** button now asks for
+  confirmation, reminding you that Mate can't fully power the climate off afterwards (use the Leapmotor
+  app or the car). The confirm fires only on the *On* action, not when turning a function off.
+
 ## [1.11.1] — 2026-06-06
 
 ### Added

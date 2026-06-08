@@ -6,7 +6,8 @@ __pycache__/
 *.pyc
 .DS_Store
 data/
-.claude/   # local Claude Code state (scheduled-task locks, session config) — never distribute
+# local Claude Code state (scheduled-task locks, session config) — never distribute
+.claude/
 # certs/ are bundled in the image — tracked by git intentionally
 
 # App certificate (provided by user at setup — see README / markoceri/leapmotor-certs)

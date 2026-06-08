@@ -3,6 +3,18 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.10] — 2026-06-08
+
+### Fixed
+- **Trip distance could log the car's entire mileage.** When the odometer signal was missing on the
+  first poll of a trip, the trip's start odometer was recorded as 0 and its distance became the full
+  odometer reading — a few-metre move showing up as thousands of km (e.g. a 3-minute hop logged as
+  6441 km), inflating daily/monthly totals and efficiency. Trip distance now trusts the odometer delta
+  only when both readings are valid, otherwise falling back to the GPS track, which also ignores
+  spurious `(0,0)`/out-of-range GPS fixes. Affected trips already in the database are recomputed from
+  their GPS track (or removed if under 0.5 km) automatically on the next start — no action needed.
+  (Thanks to the user who reported a 6441 km "trip".)
+
 ## [1.11.9] — 2026-06-08
 
 ### Added

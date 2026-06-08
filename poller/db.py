@@ -135,6 +135,22 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(max(0, a)))
 
 
+def _coord_valid(lat, lon) -> bool:
+    """A usable GPS fix: present, in range, and not the (0,0) "null island" default."""
+    return (lat is not None and lon is not None
+            and -90 <= lat <= 90 and -180 <= lon <= 180
+            and (abs(lat) > 1e-6 or abs(lon) > 1e-6))
+
+
+def _gps_track_km(rows) -> float:
+    """Sum haversine over a position track (rows with latitude/longitude), skipping
+    spurious/missing fixes so a single bad point can't inject a transcontinental jump."""
+    pts = [(r["latitude"], r["longitude"]) for r in rows
+           if _coord_valid(r["latitude"], r["longitude"])]
+    return sum(haversine_km(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+               for i in range(len(pts) - 1))
+
+
 # Settings keys holding real secrets — encrypted at rest (see crypto.py). Everything
 # else (flags, prefixes, prices, ids, identifiers) stays plaintext.
 SECRET_KEYS = {"leapmotor_pass", "leapmotor_pin", "abrp_token",
@@ -181,9 +197,50 @@ class Database:
         if "ready" not in cols:
             self._conn.execute("ALTER TABLE positions ADD COLUMN ready INTEGER DEFAULT NULL")
         self._conn.commit()
+        self._repair_odometer_trips()
         self.migrate_secrets()
         self._check_decryption()
         log.info("Database ready: %s", path)
+
+    def _repair_odometer_trips(self) -> None:
+        """One-time repair for trips logged before the odometer-zero guard. When the
+        odometer signal (1318) was missing on the trip-start poll, start_odometer_km
+        was stored as 0, so the trip recorded the car's ENTIRE mileage (e.g. a 3-min
+        hop showing 6441 km, inflating day/month totals and efficiency). Signature:
+        start odometer 0/NULL and distance == the end odometer. Recompute distance
+        from the GPS track; drop sub-0.5 km hops; refresh efficiency to match."""
+        if self.get_setting("trips_odo_repair_v1") == "1":
+            return
+        bad = self._conn.execute(
+            """SELECT id, start_soc, end_soc, end_odometer_km
+               FROM trips
+               WHERE (start_odometer_km IS NULL OR start_odometer_km = 0)
+                 AND end_odometer_km > 1
+                 AND distance_km >= end_odometer_km - 1"""
+        ).fetchall()
+        cap = self.get_battery_capacity()
+        fixed = deleted = 0
+        for t in bad:
+            rows = self._conn.execute(
+                "SELECT latitude, longitude FROM trip_positions WHERE trip_id = ? ORDER BY id",
+                (t["id"],),
+            ).fetchall()
+            gps_km = _gps_track_km(rows)
+            if gps_km < 0.5:                       # a few-metre move with no real track → drop it
+                self.delete_trip(t["id"])
+                deleted += 1
+                continue
+            energy = ((t["start_soc"] or 0) - (t["end_soc"] or 0)) / 100.0 * cap
+            eff = (energy / gps_km * 100) if energy > 0 else None
+            self._conn.execute(
+                "UPDATE trips SET distance_km = ?, efficiency_kwh_100km = ? WHERE id = ?",
+                (round(gps_km, 2), round(eff, 2) if eff else None, t["id"]),
+            )
+            fixed += 1
+        self._conn.commit()
+        self.set_setting("trips_odo_repair_v1", "1")
+        if fixed or deleted:
+            log.info("Trip odometer repair: %d recomputed from GPS, %d removed (<0.5 km)", fixed, deleted)
 
     # ── Settings ─────────────────────────────────────────────────────────────
 
@@ -360,13 +417,15 @@ class Database:
         # accurate than summing a 10s-interval GPS track (the track cuts corners on
         # bends and adds jitter when stationary). Use the odometer delta; fall back to
         # the GPS track only for short hops the integer-km odometer can't resolve (Δ=0).
-        gps_km = sum(
-            haversine_km(rows[i]["latitude"], rows[i]["longitude"],
-                         rows[i + 1]["latitude"], rows[i + 1]["longitude"])
-            for i in range(len(rows) - 1)
-        )
-        odo_delta = (data.odometer_km or 0) - (trip["start_odometer_km"] or 0)
-        distance_km = odo_delta if odo_delta > 0 else gps_km
+        gps_km = _gps_track_km(rows)
+        # Trust the odometer delta ONLY when both readings are real. A missing
+        # odometer signal (1318) reads as 0; a 0 *start* would make the delta the
+        # car's entire mileage — a few-metre move logged as thousands of km
+        # (a 3-min hop showing 6441 km). Fall back to the GPS track in that case.
+        start_odo = trip["start_odometer_km"] or 0
+        end_odo = data.odometer_km or 0
+        odo_delta = end_odo - start_odo
+        distance_km = odo_delta if (start_odo > 0 and end_odo > 0 and odo_delta > 0) else gps_km
 
         start_soc = trip["start_soc"]
         energy_used_kwh = (start_soc - data.soc) / 100.0 * self.get_battery_capacity()

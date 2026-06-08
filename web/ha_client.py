@@ -33,6 +33,25 @@ _WB_KEYWORDS = (
 _WB_DEVICE_CLASSES = ("power", "energy", "current", "voltage")
 
 
+def _parse_wb_keywords() -> tuple:
+    """The user's wb_keywords setting parsed into lowercased tokens. The single
+    source of truth for both helpers below — delimiter/whitespace-only input
+    (e.g. ",") collapses to an empty tuple, so it cleanly falls back to defaults."""
+    raw = db_reader.get_setting("wb_keywords", "")
+    return tuple(k.strip().lower() for k in raw.split(",") if k.strip())
+
+
+def get_wallbox_keywords() -> tuple:
+    """Wallbox detection keywords: the user's custom list, or the defaults when unset."""
+    return _parse_wb_keywords() or _WB_KEYWORDS
+
+
+def is_custom_keywords() -> bool:
+    """True when the user has a non-empty custom keyword list (so detection matches
+    only those, with no device_class fallback). Agrees with get_wallbox_keywords()."""
+    return bool(_parse_wb_keywords())
+
+
 def _creds() -> tuple[str | None, str | None]:
     """Return (base_url, token). Supervisor token wins when present (add-on)."""
     sup = os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASSIO_TOKEN")
@@ -108,6 +127,8 @@ def list_entities(only_wallbox: bool = True) -> list[dict]:
         return []
 
     out: list[dict] = []
+    custom_kw = _parse_wb_keywords()          # one settings read for the whole scan
+    keywords = custom_kw or _WB_KEYWORDS
     for st in body:
         eid = st.get("entity_id", "")
         attrs = st.get("attributes", {}) or {}
@@ -115,8 +136,10 @@ def list_entities(only_wallbox: bool = True) -> list[dict]:
         dclass = attrs.get("device_class", "")
         unit = attrs.get("unit_of_measurement", "")
         hay = f"{eid} {name}".lower()
-        kw_match = any(k in hay for k in _WB_KEYWORDS)
-        cls_match = dclass in _WB_DEVICE_CLASSES
+        kw_match = any(k in hay for k in keywords)
+        # Custom keywords replace detection entirely (match only those); the
+        # default list keeps the power/energy/current/voltage device_class fallback.
+        cls_match = (not custom_kw) and dclass in _WB_DEVICE_CLASSES
         if only_wallbox and not (kw_match or cls_match):
             continue
         out.append({

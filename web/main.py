@@ -20,7 +20,7 @@ import geocode
 import mqtt_check
 import auth
 
-MATE_VERSION = "1.11.8"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.11.9"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -545,6 +545,7 @@ async def settings_page(request: Request):
         ha_url=db_reader.get_setting("ha_url", ""),
         ha_has_token=bool(db_reader.get_setting("ha_token", "")),
         ha_supervisor=bool(os.environ.get("SUPERVISOR_TOKEN")),
+        wb_keywords=db_reader.get_setting("wb_keywords", ""),
         currencies=db_reader.CURRENCIES,
         currency_code=db_reader.get_currency_code(),
     ))
@@ -670,6 +671,16 @@ async def save_wallbox_entities(request: Request):
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("wallbox_saved")}</span>')
 
 
+@app.post("/api/settings/wallbox-keywords", response_class=HTMLResponse)
+async def save_wallbox_keywords(request: Request):
+    """Save custom wallbox keywords for entity filtering."""
+    form = await request.form()
+    keywords = (form.get("wb_keywords", "") or "").strip()
+    db_reader.set_setting("wb_keywords", keywords)
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("wallbox_saved")}</span>')
+
+
 @app.get("/api/wallbox/live", response_class=HTMLResponse)
 async def wallbox_live(request: Request):
     wb = ha_client.get_live()
@@ -693,7 +704,11 @@ def _integrate_kwh(points: list) -> float:
 
 def _session_energy(curve: dict) -> dict:
     """Energy comparison for one charge: DC into battery vs AC from the wallbox,
-    both integrated from real power (so AC ≥ DC and efficiency < 100%)."""
+    both integrated from real power (so AC ≥ DC and efficiency < 100%).
+    
+    For AC, resamples the HA history onto the car curve's timestamps using step-hold
+    (same approach as the overlay chart) to ensure consistency between the visual
+    chart and the calculated energy values."""
     times = curve.get("times") or []
     dc = ac = eff = None
     if times:
@@ -706,8 +721,25 @@ def _session_energy(curve: dict) -> dict:
     if (db_reader.get_setting("wallbox_enabled", "0") == "1" and times
             and ha_client.is_configured() and mapping.get("power")):
         hist = ha_client.get_history(mapping["power"], times[0], times[-1])
-        if len(hist) > 1:
-            ac = round(_integrate_kwh(hist), 2)
+        if hist:
+            # Resample hist onto car curve's timestamps using step-hold (same as chart overlay)
+            resampled_ac = []
+            j, last = 0, None
+            for t in times:
+                e = ha_client.epoch(t)
+                if e is None:
+                    resampled_ac.append(None)
+                    continue
+                while j < len(hist) and hist[j][0] <= e:
+                    last = hist[j][1]
+                    j += 1
+                resampled_ac.append(last)
+            # Integrate only the resampled points that have values
+            if resampled_ac and any(v is not None for v in resampled_ac):
+                ac_pts = [(ha_client.epoch(t), p) for t, p in zip(times, resampled_ac)
+                          if p is not None and ha_client.epoch(t) is not None]
+                if len(ac_pts) > 1:
+                    ac = round(_integrate_kwh(ac_pts), 2)
     if dc and ac and ac > 0:
         eff = round(100 * dc / ac, 1)
     return {"dc_kwh": dc, "ac_kwh": ac, "eff": eff}

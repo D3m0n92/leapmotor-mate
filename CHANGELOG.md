@@ -3,6 +3,23 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.9] — 2026-06-08
+
+### Added
+- **Configurable wallbox detection keywords.** The **Settings → Wallbox** panel now has a field for
+  comma-separated keywords used to auto-detect your wallbox entities in Home Assistant. Useful when
+  your charger's entities don't match the built-in names (Easee, go-e, KEBA, Pulsar, Feyree…). Leave
+  it empty to keep the defaults; custom keywords replace the automatic device-class detection.
+  (Thanks to **@hubcasale** — Corrado Gamberoni — PR #22.)
+
+### Fixed
+- **Wallbox AC energy / efficiency.** The AC-from-wallbox energy is now integrated with the same
+  step-hold resampling used by the comparison chart, so the numeric kWh totals match the chart and no
+  longer show impossible efficiency above 100% when Home Assistant logs the wallbox power sparsely.
+  (PR #22.)
+- Keyword parsing hardened so a delimiter/whitespace-only entry cleanly falls back to the defaults
+  instead of disabling detection, and the entity scan reads the setting once instead of per-entity.
+
 ## [1.11.8] — 2026-06-08
 
 ### Added

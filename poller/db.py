@@ -219,16 +219,23 @@ class Database:
                  AND distance_km >= end_odometer_km - 1"""
         ).fetchall()
         cap = self.get_battery_capacity()
-        fixed = deleted = 0
+        fixed = deleted = cleared = 0
         for t in bad:
             rows = self._conn.execute(
                 "SELECT latitude, longitude FROM trip_positions WHERE trip_id = ? ORDER BY id",
                 (t["id"],),
             ).fetchall()
             gps_km = _gps_track_km(rows)
-            if gps_km < 0.5:                       # a few-metre move with no real track → drop it
-                self.delete_trip(t["id"])
-                deleted += 1
+            has_gps = sum(1 for r in rows if _coord_valid(r["latitude"], r["longitude"])) >= 2
+            if gps_km < 0.5:
+                if has_gps:                        # a real few-metre short hop → drop it
+                    self.delete_trip(t["id"])
+                    deleted += 1
+                else:                              # no GPS track → distance UNKNOWN; clear the bogus
+                    self._conn.execute(            # odometer-mileage value but KEEP the trip
+                        "UPDATE trips SET distance_km = NULL, efficiency_kwh_100km = NULL WHERE id = ?",
+                        (t["id"],))
+                    cleared += 1
                 continue
             energy = ((t["start_soc"] or 0) - (t["end_soc"] or 0)) / 100.0 * cap
             eff = (energy / gps_km * 100) if energy > 0 else None
@@ -239,8 +246,9 @@ class Database:
             fixed += 1
         self._conn.commit()
         self.set_setting("trips_odo_repair_v1", "1")
-        if fixed or deleted:
-            log.info("Trip odometer repair: %d recomputed from GPS, %d removed (<0.5 km)", fixed, deleted)
+        if fixed or deleted or cleared:
+            log.info("Trip odometer repair: %d recomputed from GPS, %d dropped (<0.5 km), %d kept (no GPS, distance cleared)",
+                     fixed, deleted, cleared)
 
     # ── Settings ─────────────────────────────────────────────────────────────
 
@@ -418,6 +426,7 @@ class Database:
         # bends and adds jitter when stationary). Use the odometer delta; fall back to
         # the GPS track only for short hops the integer-km odometer can't resolve (Δ=0).
         gps_km = _gps_track_km(rows)
+        has_gps = len(rows) >= 2          # rows are real fixes only (add_trip_position skips (0,0))
         # Trust the odometer delta ONLY when both readings are real. A missing
         # odometer signal (1318) reads as 0; a 0 *start* would make the delta the
         # car's entire mileage — a few-metre move logged as thousands of km
@@ -425,13 +434,21 @@ class Database:
         start_odo = trip["start_odometer_km"] or 0
         end_odo = data.odometer_km or 0
         odo_delta = end_odo - start_odo
-        distance_km = odo_delta if (start_odo > 0 and end_odo > 0 and odo_delta > 0) else gps_km
+        if start_odo > 0 and end_odo > 0 and odo_delta > 0:
+            distance_km = odo_delta
+        elif has_gps:
+            distance_km = gps_km
+        else:
+            # Neither a valid odometer NOR a GPS track (e.g. the car reports no GPS):
+            # distance is UNKNOWN → keep it None so the trip is PRESERVED with its
+            # time/SOC/energy, instead of being dropped as a <0.5 km "short hop".
+            distance_km = None
 
         start_soc = trip["start_soc"]
         energy_used_kwh = (start_soc - data.soc) / 100.0 * self.get_battery_capacity()
         # Withhold efficiency when net energy is <= 0 (SOC rose over the trip — regen
         # or a cloud SOC blip): a negative kWh/100km is meaningless, don't store it.
-        efficiency = (energy_used_kwh / distance_km * 100) if (distance_km > 0.5 and energy_used_kwh > 0) else None
+        efficiency = (energy_used_kwh / distance_km * 100) if (distance_km and distance_km > 0.5 and energy_used_kwh > 0) else None
 
         started_at = datetime.fromisoformat(trip["started_at"])
         duration_min = (datetime.now(timezone.utc) - started_at).total_seconds() / 60
@@ -442,14 +459,15 @@ class Database:
                efficiency_kwh_100km=?, regen_kwh=?
                WHERE id=?""",
             (_now_iso(), data.latitude, data.longitude, data.soc,
-             data.odometer_km, round(distance_km, 2), round(duration_min, 1),
+             data.odometer_km, round(distance_km, 2) if distance_km is not None else None,
+             round(duration_min, 1),
              round(efficiency, 2) if efficiency else None, round(regen_kwh, 3),
              trip_id),
         )
         self._conn.commit()
         log.info(
             "Trip #%d ended — %.1f km | SOC %.1f→%.1f%% | %.0f min | eff %.1f kWh/100km",
-            trip_id, distance_km, start_soc, data.soc, duration_min,
+            trip_id, distance_km or 0, start_soc, data.soc, duration_min,
             efficiency or 0,
         )
         return distance_km

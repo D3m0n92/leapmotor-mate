@@ -88,3 +88,30 @@ def test_repair_migration(tmp_path):
     assert q(b_zero)["distance_km"] < 1.5         # (0,0) ignored, no jump
     assert q(legit)["distance_km"] == 42.0        # legit trip untouched
     assert db2.get_setting("trips_odo_repair_v1") == "1"
+
+
+def test_finalize_keeps_trip_when_distance_unmeasurable(tmp_path):
+    # No odometer (start 0) AND no GPS track → distance UNKNOWN → keep the trip (don't drop it as a
+    # <0.5 km hop). Regression: 1.11.10's GPS fallback returned 0 for no-GPS cars → trips vanished.
+    db = D.Database(str(tmp_path / "t.db"))
+    tid = _open_trip(db, start_odo=0)            # odometer missing
+    # (no _add_track → car reported no GPS → trip_positions empty)
+    data = types.SimpleNamespace(odometer_km=0.0, soc=79.0, latitude=0.0, longitude=0.0)
+    assert db.finalize_trip(tid, data) is None   # None ⇒ recorder KEEPS it (0.0 would be deleted)
+    row = db._conn.execute("SELECT distance_km, ended_at FROM trips WHERE id=?", (tid,)).fetchone()
+    assert row["distance_km"] is None            # stored NULL, not 0
+    assert row["ended_at"] is not None           # finalized & preserved (time/SOC kept)
+
+
+def test_repair_migration_keeps_no_gps_trips(tmp_path):
+    # A bug-signature trip with NO GPS must be KEPT (distance cleared to NULL), not deleted.
+    path = str(tmp_path / "t.db")
+    db = D.Database(path)
+    b_nogps = _bad_trip(db, 6449, 6449.0, [])    # bug signature, NO GPS positions
+    db._conn.execute("DELETE FROM settings WHERE key='trips_odo_repair_v1'")
+    db._conn.commit()
+    db._conn.close()
+    db2 = D.Database(path)                        # reopen → runs the repair
+    row = db2._conn.execute("SELECT distance_km FROM trips WHERE id=?", (b_nogps,)).fetchone()
+    assert row is not None                        # NOT deleted (no GPS ⇒ unmeasurable → kept)
+    assert row["distance_km"] is None             # bogus 6449 km cleared to NULL

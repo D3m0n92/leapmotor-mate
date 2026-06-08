@@ -3,6 +3,24 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.15] — 2026-06-08
+
+### Fixed
+- **Trips were no longer saved on cars that don't report GPS.** The 1.11.10 odometer fix falls back to the
+  GPS track for distance; if the car reports neither a valid odometer nor any GPS fixes, the distance came
+  out as 0 and the trip was dropped as a "< 0.5 km short hop". Such trips are now **kept** with an unknown
+  distance (time, SoC and energy preserved); only genuinely-measured sub-0.5 km hops are dropped. The
+  one-time odometer-repair migration is likewise fixed to keep (not delete) GPS-less trips. (Regression in 1.11.10.)
+- **Wallbox max-current slider snapping back to 0 after you moved it.** Setting the value re-read the entity
+  immediately, but HA's `number.set_value` is async and a device-backed wallbox often still reports the
+  old/idle value for a moment, so the slider jumped back. It now keeps the value you set (optimistic), and
+  the real reading reappears on the next page load.
+
+### Changed
+- **Clearer label for the wallbox power control in Settings.** The wallbox entity-mapping role previously
+  labelled "Max current" is now **"Wallbox power control"** (with a hint that it's the adjustable charging
+  current/power `number` entity), to make it easier to map the right entity and avoid mistakes.
+
 ## [1.11.14] — 2026-06-08
 
 ### Changed

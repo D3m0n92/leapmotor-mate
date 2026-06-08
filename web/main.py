@@ -20,7 +20,7 @@ import geocode
 import mqtt_check
 import auth
 
-MATE_VERSION = "1.11.14"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.11.15"  # bump together with the git tag + add-on config.yaml at release
 
 app = FastAPI(title="LeapMotor Mate")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -859,8 +859,14 @@ async def wallbox_set_max_current(request: Request):
     except (TypeError, ValueError):
         val = None
     ok = ha_client.set_max_current(val) if val is not None else False
+    # Show the value the user JUST set (optimistic), keeping the entity's min/max/step/unit. HA's
+    # number.set_value is async and a device-backed wallbox entity often still reports the old/idle
+    # value (frequently 0) for a moment, so re-reading immediately would snap the slider back to 0.
+    cfg = ha_client.get_max_current_config()
+    if ok and val is not None and cfg:
+        cfg = {**cfg, "value": val}
     return templates.TemplateResponse(request, "partials/wallbox_control.html", _ctx(
-        cfg=ha_client.get_max_current_config(), applied=ok,
+        cfg=cfg, applied=ok,
     ))
 
 

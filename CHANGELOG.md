@@ -3,6 +3,13 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Delete trip.** The trip detail page now has a **🗑 Delete trip** button (with an explicit
+  confirmation prompt) that permanently removes a trip and its GPS track; daily/monthly/lifetime
+  totals recompute automatically. Useful for one-off bad data.
+
 ## [1.11.10] — 2026-06-08
 
 ### Fixed

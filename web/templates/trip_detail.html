@@ -11,6 +11,9 @@
   </h1>
   <a href="{{ trip.id }}/route.gpx" download
      class="ml-auto border border-slate-600 text-slate-300 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-brand flex-shrink-0">↓ {{ t('export_gpx') }}</a>
+  <button hx-delete="{{ trip.id }}" hx-confirm="{{ t('trip_delete_confirm') }}"
+          class="border border-red-900/60 text-red-400 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-red-500 hover:bg-red-500/10 flex-shrink-0">
+    🗑 {{ t('trip_delete') }}</button>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">

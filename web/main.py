@@ -254,6 +254,15 @@ async def trip_detail(request: Request, trip_id: int):
     ))
 
 
+@app.delete("/trips/{trip_id}")
+async def delete_trip(request: Request, trip_id: int):
+    """Permanently delete one trip + its GPS track (HTMX, confirmed in the UI).
+    Redirects the browser back to the trips list (ingress-path aware)."""
+    db_reader.delete_trip(trip_id)
+    base = request.headers.get("x-ingress-path", "")
+    return Response(status_code=200, headers={"HX-Redirect": f"{base}/trips"})
+
+
 @app.get("/charges", response_class=HTMLResponse)
 async def charges_page(request: Request, highlight: int = 0):
     vehicle, _ = db_reader.get_vehicle()

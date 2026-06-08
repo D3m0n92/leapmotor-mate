@@ -617,6 +617,16 @@ def get_latest_status() -> Optional[dict]:
     return d
 
 
+def delete_trip(trip_id: int) -> bool:
+    """Permanently remove a trip and its GPS track. Returns True if a trip was deleted.
+    Day/month/lifetime trip totals recompute from the DB, so they update automatically."""
+    db = _conn_rw()
+    cur = db.execute("DELETE FROM trips WHERE id=?", (trip_id,))
+    db.execute("DELETE FROM trip_positions WHERE trip_id=?", (trip_id,))
+    db.commit()
+    return cur.rowcount > 0
+
+
 def get_trips(limit: int = 500) -> list[dict]:
     db = _get()
     rows = db.execute(

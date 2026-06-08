@@ -253,6 +253,8 @@ _T: dict[str, dict[str, str]] = {
         "map_arrow":            "🗺 Map →",
         # Trip detail
         "back_trips":           "← Trips",
+        "trip_delete":          "Delete trip",
+        "trip_delete_confirm":  "Delete this trip permanently? This can't be undone.",
         "distance":             "Distance",
         "efficiency":           "Efficiency",
         "regen":                "Regen",
@@ -742,6 +744,8 @@ _T: dict[str, dict[str, str]] = {
         "map_arrow":            "🗺 Mappa →",
         # Trip detail
         "back_trips":           "← Viaggi",
+        "trip_delete":          "Elimina viaggio",
+        "trip_delete_confirm":  "Eliminare definitivamente questo viaggio? L'operazione non è reversibile.",
         "distance":             "Distanza",
         "efficiency":           "Efficienza",
         "regen":                "Regen",
@@ -1231,6 +1235,8 @@ _T: dict[str, dict[str, str]] = {
         "map_arrow":            "🗺 Carte →",
         # Trip detail
         "back_trips":           "← Trajets",
+        "trip_delete":          "Supprimer le trajet",
+        "trip_delete_confirm":  "Supprimer définitivement ce trajet ? Cette action est irréversible.",
         "distance":             "Distance",
         "efficiency":           "Efficacité",
         "regen":                "Régén",
@@ -1720,6 +1726,8 @@ _T: dict[str, dict[str, str]] = {
         "map_arrow":            "🗺 Karte →",
         # Trip detail
         "back_trips":           "← Fahrten",
+        "trip_delete":          "Fahrt löschen",
+        "trip_delete_confirm":  "Diese Fahrt endgültig löschen? Das kann nicht rückgängig gemacht werden.",
         "distance":             "Strecke",
         "efficiency":           "Effizienz",
         "regen":                "Rekup.",

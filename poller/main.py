@@ -165,6 +165,32 @@ def _write_comfort_state(db, data):
     _last_comfort[data.vin] = blob
 
 
+_OTA_CHECK_INTERVAL = 600   # 10 min — an OTA notice isn't time-critical
+_last_ota_check = 0.0
+
+
+def _maybe_check_ota(db, client):
+    """Throttled, best-effort OTA check (scans the account inbox for an update notice). Stored in
+    settings for the web (ota_available / ota_title / ota_time). Never raises — a failed check must
+    not disturb the poll; it just leaves the previous value."""
+    global _last_ota_check
+    now = time.time()
+    if now - _last_ota_check < _OTA_CHECK_INTERVAL:
+        return
+    _last_ota_check = now   # set before the call so a slow/broken endpoint can't be hammered
+    try:
+        with _API_LOCK:
+            res = client.check_ota()
+    except Exception as e:  # noqa: BLE001
+        log.debug("OTA check failed: %s", e)
+        return
+    if not res:                          # fetch error → keep the last known value
+        return
+    db.set_setting("ota_available", "1" if res.get("ota") else "0")
+    db.set_setting("ota_title", res.get("title") or "")
+    db.set_setting("ota_time", str(res.get("time") or ""))
+
+
 def _mqtt_tick(db, client, data, service):
     """Manage the MQTT bridge each poll cycle: (dis)connect on the enable flag,
     then publish the current state. Returns the (possibly new/None) service."""
@@ -297,6 +323,9 @@ def main():
                 data = client.get_status()
             recorder.process(data)
             _write_comfort_state(db, data)
+
+            # OTA / software-update check (scans the account inbox) — throttled, best-effort.
+            _maybe_check_ota(db, client)
 
             # ABRP live telemetry (opt-in, off by default)
             if db.get_setting("abrp_enabled") == "1":

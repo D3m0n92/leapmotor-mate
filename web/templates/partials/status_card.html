@@ -64,6 +64,17 @@
       {% if status.ready %}Ready{% else %}Not Ready{% endif %}
     </span>
   </div>
+  <div class="flex justify-between items-center text-slate-400 col-span-2 gap-2">
+    <span class="flex-shrink-0">🔄 {{ t('ota_label') }}</span>
+    {% if status.ota and status.ota.available %}
+    <span class="font-semibold text-amber-300 flex items-center gap-1.5 min-w-0 justify-end"
+          title="{{ status.ota.title }}{% if status.ota.time %} · {{ status.ota.time }}{% endif %}">
+      <span class="truncate">⬆️ {{ t('ota_available') }}</span>
+    </span>
+    {% else %}
+    <span class="font-medium text-slate-500">{{ t('ota_none') }}</span>
+    {% endif %}
+  </div>
   <div class="flex justify-between text-slate-400 col-span-2">
     <span>{{ t('last_seen') }}</span>
     <span class="text-white font-medium">{{ status.last_seen }}</span>

@@ -20,6 +20,7 @@ import ha_client
 import geocode
 import mqtt_check
 import auth
+import update_check
 
 MATE_VERSION = "1.14.0"  # bump together with the git tag + add-on config.yaml at release
 
@@ -142,6 +143,7 @@ def _ctx(**kwargs):
         if _driving(pos): return t("state_driving")
         return t("state_parked")
     return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION,
+            "update": update_check.get_update_status(MATE_VERSION),
             "wallbox_enabled": db_reader.get_setting("wallbox_enabled", "0") == "1",
             "currency": db_reader.get_currency(), "auth_enabled": auth.enabled(),
             "soc_color": _soc_color, "state_label": state_label, "state_color": _state_color}

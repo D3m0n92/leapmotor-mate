@@ -694,7 +694,26 @@ def get_latest_status() -> Optional[dict]:
             d["last_seen"] = f"{delta // 3600}h ago"
     except Exception:
         d["last_seen"] = "unknown"
+    # OTA / software-update status (the poller scans the account message inbox for an update notice).
+    d["ota"] = get_ota_status()
     return d
+
+
+def get_ota_status() -> dict:
+    """OTA / software-update status the poller stored (from scanning the account inbox). Returns
+    {available:bool, title:str|None, time:str|None (localized "dd/mm HH:MM")}. False until the
+    poller has run a check; only ever True when an update notice is actually present."""
+    available = get_setting("ota_available", "") == "1"
+    title = get_setting("ota_title", "") or None
+    when = None
+    raw = get_setting("ota_time", "")
+    if raw:
+        try:
+            dt = datetime.fromtimestamp(int(raw) / 1000, tz=timezone.utc)
+            when = (_local_dt(dt.isoformat()) or dt).strftime("%d/%m %H:%M")
+        except (TypeError, ValueError, OSError):
+            when = None
+    return {"available": available, "title": title, "time": when}
 
 
 def delete_trip(trip_id: int) -> bool:

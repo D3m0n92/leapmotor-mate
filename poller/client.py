@@ -87,6 +87,17 @@ class EmptyStatusError(Exception):
     retry rather than treating it as a hard failure."""
 
 
+# Title/body keywords that mark an inbox message as an OTA / software update (lowercase, substring),
+# across the languages a Leapmotor account may use. STOPGAP until a real OTA message pins its
+# msg_type — see LeapmotorMateClient.check_ota(). Kept broad enough to catch the notice, specific
+# enough that everyday messages (vehicle sharing, etc.) don't match.
+_OTA_KEYWORDS = (
+    "ota", "fota", "firmware", "aggiorn", "software update", "software-update", "system update",
+    "vehicle update", "update available", "mise à jour", "mise a jour", "logiciel",
+    "aktualis", "software-aktualisierung", "upgrade",
+)
+
+
 class LeapmotorMateClient:
     def __init__(self, username: str, password: str, pin: str, cert_path: str, key_path: str,
                  device_id: str | None = None):
@@ -148,6 +159,31 @@ class LeapmotorMateClient:
             # can back off cleanly and retry.
             raise EmptyStatusError("vehicle status has no live signals (car asleep or not reporting)")
         return _parse_signal(self._vehicle.vin, sig)
+
+    def check_ota(self) -> dict:
+        """Scan the account message inbox for an OTA / software-update notice. This is the ONLY
+        automatic "update available" signal Leapmotor exposes — there is NO dedicated OTA-status
+        endpoint (even the official-app flow / LeapConnect needs the FOTA task_id typed in by hand);
+        the cloud delivers "update available" as an inbox MESSAGE. Best-effort, never raises.
+        Returns {ota: bool, title: str|None, time: int|None (epoch ms)}.
+
+        We match on the message title/body because the numeric `msg_type` is undocumented and was
+        None on every message we've captured so far — so this keyword match is a deliberate STOPGAP:
+        the moment a real OTA message is seen on-car, key off its exact msg_type instead and tighten
+        this. Non-OTA messages (vehicle sharing, etc.) are intentionally ignored — not surfaced."""
+        try:
+            ml = self._api.get_message_list(page_no=1, page_size=20)
+            msgs = getattr(ml, "messages", None) or []
+        except Exception as e:  # noqa: BLE001 — strict lib parser can raise on odd payloads
+            log.debug("OTA message scan failed: %s", e)
+            return {}
+        for m in msgs:
+            hay = f"{getattr(m, 'title', '') or ''} {getattr(m, 'message', '') or ''}".lower()
+            if any(k in hay for k in _OTA_KEYWORDS):
+                st = getattr(m, "send_time", None)
+                return {"ota": True, "title": getattr(m, "title", None),
+                        "time": int(st) if st else None}
+        return {"ota": False}
 
     def close(self):
         self._api.close()

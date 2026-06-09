@@ -232,6 +232,10 @@ _T: dict[str, dict[str, str]] = {
         "ac_target":       "A/C Target",
         "battery_temp":    "Battery temp",
         "last_seen":       "Last seen",
+        "ota_label":       "OTA updates",
+        "ota_none":        "None",
+        "ota_available":   "Available",
+        "app_update":      "Update available",
         "waiting_data":    "Waiting for first data...",
         "check_poller":    "Make sure the poller is running",
         # Overview
@@ -817,6 +821,10 @@ _T: dict[str, dict[str, str]] = {
         "ac_target":       "Target A/C",
         "battery_temp":    "Temp. batteria",
         "last_seen":       "Ultimo agg.",
+        "ota_label":       "Aggiornamenti OTA",
+        "ota_none":        "Nessuno",
+        "ota_available":   "Disponibile",
+        "app_update":      "Aggiornamento disponibile",
         "waiting_data":    "In attesa dei primi dati...",
         "check_poller":    "Assicurati che il poller sia avviato",
         # Overview
@@ -1402,6 +1410,10 @@ _T: dict[str, dict[str, str]] = {
         "ac_target":       "Cible clim",
         "battery_temp":    "Temp. batterie",
         "last_seen":       "Dernière maj",
+        "ota_label":       "Mises à jour OTA",
+        "ota_none":        "Aucune",
+        "ota_available":   "Disponible",
+        "app_update":      "Mise à jour disponible",
         "waiting_data":    "En attente des premières données...",
         "check_poller":    "Vérifiez que le poller est lancé",
         # Overview
@@ -1987,6 +1999,10 @@ _T: dict[str, dict[str, str]] = {
         "ac_target":       "Klima-Ziel",
         "battery_temp":    "Batterietemp.",
         "last_seen":       "Zuletzt aktualisiert",
+        "ota_label":       "OTA-Updates",
+        "ota_none":        "Keine",
+        "ota_available":   "Verfügbar",
+        "app_update":      "Update verfügbar",
         "waiting_data":    "Warte auf erste Daten...",
         "check_poller":    "Stellen Sie sicher, dass der Poller läuft",
         # Overview

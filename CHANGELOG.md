@@ -6,21 +6,37 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ## [1.12.0] — 2026-06-09
 
 ### Changed
-- **Home charge cost is now taken from the wallbox's own energy counter — measured, not estimated.**
-  When a wallbox with a kWh counter is paired, Mate reads the counter at the **start** and at the
-  **end** of each charge and bills the **difference** (the exact energy the wallbox delivered,
-  conversion losses included) — the same way a trip uses the start/end odometer. It's reset-safe:
-  works whether the counter is a lifetime total or zeroes each session. The charge card now shows both
-  **🔋 in battery** and **🔌 wallbox (billed)**, and the cost is plainly *wallbox kWh × price*. With no
-  wallbox counter (or for public charges) the **battery (SoC) energy × price** is used. The previous
-  method integrated the fluctuating power curve, which under-counted on short/sparse sessions and gave
-  costs that didn't add up — that estimation is gone; instantaneous power is now used only for the chart.
-  *(Charges recorded before 1.12.0 keep their earlier value and can't be recomputed — the start/end
-  counter readings weren't captured at the time.)*
+- **Home charge cost is now measured from the wallbox's own energy counter — not estimated.**
+  When a wallbox with a kWh counter is paired, Mate samples the counter all through the charge and bills
+  the **energy it actually added** — the sum of the counter's increases over the session, i.e. the exact
+  AC energy the wallbox delivered (conversion losses included). It's **reset/race-safe**: a per-session
+  counter that zeroes mid-charge is handled just like a lifetime total, no matter when it resets relative
+  to a poll. The charge card now leads with the **🔌 wallbox (billed)** kWh and shows the **🔋 in-battery
+  (DC, from SoC)** energy beneath it with the AC→DC efficiency; the cost is plainly *wallbox kWh × price*.
+  With no wallbox counter (or for public charges) the **battery (SoC) energy × price** is billed instead.
+  The previous method integrated the fluctuating power curve, which under-counted on short/sparse sessions
+  and produced costs that didn't add up — that estimation is gone; instantaneous power now feeds only the
+  chart. Day / month / year and lifetime energy totals sum the billed energy too, so cards and totals agree.
+  *(Charges recorded before 1.12.0 keep their earlier value and **can't be recomputed** with the new
+  method — the wallbox counter readings weren't captured during those past sessions. You can delete an old
+  session with its 🗑 button if you prefer.)*
 
 ### Added
 - **Delete a charge session** — a 🗑 button on each charge card (with confirmation), mirroring the
   existing delete-trip action. Day / month / lifetime totals recompute automatically.
+- **Pages keep themselves fresh.** The Charges page reloads the instant a charge finishes, so the new
+  completed session shows up without a manual refresh; the live/data pages (Vehicle, Wallbox, Battery,
+  Statistics, Trips, Commands) auto-refresh while idle — never while you're filling in a form, and your
+  scroll position is kept.
+
+### Fixed
+- **A finished charge no longer stays "charging" for several minutes.** On the B10 the car's plug flag
+  (signal 47) latches on after an AC charge and clears only minutes later — so a charge session could
+  linger open long after charging had finished (and even after the cable was unplugged), inflating its
+  window. Mate now derives "plugged in" from the charge-connection signal (1149), which drops as soon as
+  the session ends, so the charge closes promptly and its window is accurate.
+- **GPX export of a single trip downloaded an empty file.** The download link resolved to the wrong URL
+  (a 404) under the app's base path; it's now linked correctly (Home Assistant ingress included).
 
 ## [1.11.18] — 2026-06-08
 

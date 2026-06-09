@@ -244,14 +244,29 @@ def _charge_power_kw(sig: dict) -> float:
 
 
 def _is_plugged_in(sig: dict) -> bool:
-    """Whether the charge cable is physically connected. Signal 47 is the reliable plug
-    flag (matches leapmotor-ha _is_plugged_in) — it stays 0 while driving. Signal 1149
-    is only a fallback: it reads 1 spuriously during regen at speed, so it must NOT be
-    the primary source or driving gets mistaken for a charge session."""
-    plug = _si(sig, "47")
-    if plug is not None:
-        return plug == 1
-    return _si(sig, "1149") in (1, 2)
+    """Whether the charge cable is physically connected. Uses signal 1149 (charge
+    connection status: 1=connected, 2=charging), gated by motion.
+
+    Why 1149 and not 47: signal 47 (acInputSlowCharge) was the old primary, but on the
+    B10 it LATCHES at 1 after an AC charge and only clears ~5 min later, when the car's
+    charge controller tears down the AC subsystem — it does NOT drop on unplug. That kept
+    a finished charge SESSION open long after the cable was pulled (the plug_connected
+    OR-term in the state machine never went false), inflating the session window.
+    Signal 1149 instead drops to 0 promptly when the charge SESSION ends — at completion
+    (target SoC reached) or on unplug. Verified on-car twice: 1149 fell ~40s after the car
+    hit its charge limit and the session closed at once, while 47 stayed latched at 1 for
+    10+ minutes (right through the physical unplug). Its only flaw is reading 1 spuriously
+    during regen at speed, so we suppress it while the car is moving (it can never be
+    plugged in while driving anyway — same motion gate as _is_charging). Falls back to
+    signal 47 only when 1149 is absent (other models)."""
+    if _si(sig, "1010") not in (None, 0):       # gear R/N/D → moving, cannot be plugged
+        return False
+    if (_sf(sig, "1319") or 0) > 2.0:            # speed > 2 km/h → moving (gear may lag)
+        return False
+    conn = _si(sig, "1149")
+    if conn is not None:
+        return conn in (1, 2)
+    return _si(sig, "47") == 1                   # legacy fallback when 1149 is missing
 
 
 def _is_charging(sig: dict) -> bool:

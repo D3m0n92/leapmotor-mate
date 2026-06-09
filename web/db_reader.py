@@ -599,10 +599,27 @@ def save_fresh_signals(signals: dict) -> None:
     gear_map = {0: "P", 1: "R", 2: "N", 3: "D"}
     windows_open = int(any(sig(k) != 0 for k in ("1693", "1694", "1695", "1696")))
 
-    # Plug from signal 47 (reliable, stays 0 while driving) — 1149 only as fallback,
-    # since it reads 1 spuriously during regen at speed. Matches leapmotor-ha.
-    _plug47 = signals.get("47")
-    plug_connected = (int(_plug47) == 1) if _plug47 is not None else (sig("1149") in (1, 2))
+    # Plug from signal 1149 (charge connection status), gated by motion. Signal 47
+    # (acInputSlowCharge) latches at 1 for ~5 min after an AC charge on the B10 and does
+    # NOT clear on unplug, so it cannot drive session-close; 1149 drops to 0 immediately.
+    # 1149 reads 1 spuriously during regen at speed → suppress while moving (mirrors
+    # _is_charging). 47 is only a fallback when 1149 is absent. See poller/client._is_plugged_in.
+    def _is_plugged() -> bool:
+        if int(signals.get("1010") or 0) != 0:          # gear R/N/D → moving
+            return False
+        try:
+            if float(signals.get("1319") or 0) > 2.0:   # speed > 2 km/h → moving
+                return False
+        except (TypeError, ValueError):
+            pass
+        conn = signals.get("1149")
+        if conn is None:
+            return int(signals.get("47") or 0) == 1     # legacy fallback when 1149 absent
+        try:
+            return int(conn) in (1, 2)
+        except (TypeError, ValueError):
+            return False
+    plug_connected = _is_plugged()
 
     db.execute(
         """INSERT INTO positions (
@@ -1149,6 +1166,18 @@ def _charge_window_display(db, raw_start, raw_end) -> dict:
             "real_end": (_local_iso(re) or "")[11:16]}
 
 
+def _billed_kwh(c) -> float:
+    """The energy figure SHOWN (and billed) for a charge: the wallbox-measured AC kWh for
+    HOME charges that have a wallbox reading (what you actually pay for, conversion losses
+    included), else the battery DC (SoC) energy. Single source of truth so the per-charge
+    card, the period totals and get_charge_stats all agree. Mirrors the SQL CASE in
+    get_charge_stats and the card's `show_wb` condition (charges.html)."""
+    ac = c.get("ac_energy_kwh")
+    if c.get("location_type") == "HOME" and ac and ac > 0:
+        return ac
+    return c.get("energy_added_kwh") or 0
+
+
 def get_charges_grouped() -> list[dict]:
     """Return charges nested as year → month → day."""
     charges = get_charges()
@@ -1185,7 +1214,7 @@ def get_charges_grouped() -> list[dict]:
 
         years[yr]["months"][mo]["days"][day]["charges"].append(c)
 
-        kwh  = c.get("energy_added_kwh") or 0
+        kwh  = _billed_kwh(c)   # wallbox AC for HOME (billed); DC otherwise — matches the card
         cost = c.get("cost") or 0
         for node in [years[yr], years[yr]["months"][mo], years[yr]["months"][mo]["days"][day]]:
             node["kwh"]   = round(node["kwh"] + kwh, 2)
@@ -1231,7 +1260,9 @@ def get_charge_stats() -> dict:
     row = db.execute(
         """SELECT
                COUNT(*)                            AS session_count,
-               ROUND(SUM(energy_added_kwh), 2)    AS total_kwh,
+               -- billed energy: wallbox AC for HOME w/ a reading, else battery DC (mirrors _billed_kwh)
+               ROUND(SUM(CASE WHEN location_type='HOME' AND ac_energy_kwh IS NOT NULL AND ac_energy_kwh > 0
+                              THEN ac_energy_kwh ELSE energy_added_kwh END), 2)  AS total_kwh,
                ROUND(AVG(duration_min / 60.0), 1) AS avg_duration_h,
                ROUND(SUM(cost), 2)                AS total_cost,
                ROUND(AVG(end_soc - start_soc), 1) AS avg_soc_delta,

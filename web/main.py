@@ -21,7 +21,7 @@ import geocode
 import mqtt_check
 import auth
 
-MATE_VERSION = "1.12.0-dev"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.12.0"  # bump together with the git tag + add-on config.yaml at release
 
 log = logging.getLogger("mate.web")
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block autorefresh %}0{% endblock %}{# own reload-on-charge-end + live panel poll #}
 {% block title %}Charges — LeapMotor Mate{% endblock %}
 
 {% block content %}
@@ -323,13 +324,14 @@ fetch('api/charge-plan').then(r => r.json()).then(d => {
               <div class="grid grid-cols-3 gap-2 mt-3">
                 {% set show_wb = c.ac_energy_kwh and c.location_type == 'HOME' %}
                 <div style="background:#0f172a;border-radius:8px;padding:8px 12px">
-                  <div class="stat-label" style="font-size:10px">{% if show_wb %}🔋 {{ t('energy_in_battery') }}{% else %}{{ t('energy') }}{% endif %}</div>
+                  <div class="stat-label" style="font-size:10px">{{ t('energy') }}</div>
                   <div style="font-size:16px;font-weight:700;color:#fbbf24">
-                    +{{ "%.1f"|format(c.energy_added_kwh or 0) }}<span style="font-size:11px;color:#94a3b8;font-weight:400"> kWh</span>
+                    +{{ "%.1f"|format((c.ac_energy_kwh if show_wb else c.energy_added_kwh) or 0) }}<span style="font-size:11px;color:#94a3b8;font-weight:400"> kWh</span>
+                    {% if show_wb %}<span style="font-size:10px;color:#60a5fa;font-weight:400" title="{{ t('wallbox_billed_help') }}"> 🔌 {{ t('wallbox_billed') }}</span>{% endif %}
                   </div>
                   {% if show_wb %}
-                  <div style="font-size:10px;color:#60a5fa;margin-top:3px" title="{{ t('wallbox_billed_help') }}">
-                    🔌 {{ "%.1f"|format(c.ac_energy_kwh) }} kWh · {{ t('wallbox_billed') }}
+                  <div style="font-size:10px;color:#94a3b8;margin-top:3px" title="{{ t('wallbox_billed_help') }}">
+                    🔋 {{ "%.1f"|format(c.energy_added_kwh or 0) }} kWh {{ t('energy_in_battery') }} (DC){% if c.energy_added_kwh %} · {{ t('efficiency') }} {{ "%.0f"|format(100 * (c.energy_added_kwh or 0) / c.ac_energy_kwh) }}%{% endif %}
                   </div>
                   {% endif %}
                 </div>
@@ -423,5 +425,24 @@ if (HIGHLIGHT) {
     requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }
 }
+
+// Auto-refresh the history when a charge completes. The live panel (#charging-live-panel) polls
+// every 30s; when its state flips charging→not-charging a charge has just ended, so reload once to
+// surface the new completed-charge card + updated totals (the history list itself is static). The
+// tree's open/collapsed state survives the reload via localStorage above, so it is non-disruptive.
+(function () {
+  const isCharging = () => {
+    const m = document.getElementById('charging-state');
+    return m ? m.dataset.charging === 'true' : null;
+  };
+  let wasCharging = isCharging();
+  document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.target && e.target.id === 'charging-live-panel') {
+      const now = isCharging();
+      if (wasCharging === true && now === false) location.reload();
+      wasCharging = now;
+    }
+  });
+})();
 </script>
 {% endblock %}

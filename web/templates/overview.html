@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block autorefresh %}0{% endblock %}{# own HTMX status poll (every 30s) #}
 {% block title %}{{ t('nav_overview') }} — LeapMotor Mate{% endblock %}
 
 {% block content %}

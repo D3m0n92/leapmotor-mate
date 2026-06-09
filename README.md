@@ -51,7 +51,7 @@ The data lives in a local SQLite database. Nothing is sent anywhere except to th
 
 ## Requirements
 
-1. **A Leapmotor account.** ⚠️ **Use a *dedicated* account, not the one on your phone.** The Leapmotor cloud binds a session per device, so a second client can evict your phone (or vice‑versa). Create a separate account and share the car with it from the official app.
+1. **A Leapmotor account.** ⚠️ **Use a *dedicated* account, not the one on your phone.** The Leapmotor cloud binds a session per device, so a second client can evict your phone (or vice‑versa). Create a separate account, then **share the car with it from the official app**: logged in on the account that *owns* the car, share/authorise the vehicle to the new account with **all permissions** and a **permanent** duration (a temporary share expires and breaks Mate later). **Check it worked:** log into the official Leapmotor app with the *second* account and confirm the car appears there — if it doesn't, the share is missing and Mate will report *“No vehicle found on this account.”*
 2. **The Leapmotor app TLS certificate** (`app.crt` + `app.key`). This is the *same for everyone* (it identifies the Leapmotor app, not you) and is **not** included in this repository. Download the two files from:
 
    👉 **https://github.com/markoceri/leapmotor-certs**
@@ -238,7 +238,7 @@ I dati restano in un database SQLite locale. Nulla viene inviato altrove se non 
 
 ## Requisiti
 
-1. **Un account Leapmotor.** ⚠️ **Usa un account *dedicato*, non quello del telefono.** Il cloud Leapmotor lega una sessione per dispositivo: un secondo client può sfrattare il telefono (e viceversa). Crea un account separato e condividi l'auto con esso dall'app ufficiale.
+1. **Un account Leapmotor.** ⚠️ **Usa un account *dedicato*, non quello del telefono.** Il cloud Leapmotor lega una sessione per dispositivo: un secondo client può sfrattare il telefono (e viceversa). Crea un account separato, poi **condividi l'auto con esso dall'app ufficiale**: dall'account che *possiede* l'auto, condividi/autorizza il veicolo al nuovo account con **tutti i permessi** e durata **permanente** (una condivisione temporanea scade e poi rompe Mate). **Verifica che funzioni:** accedi all'app ufficiale Leapmotor con il *secondo* account e controlla che l'auto compaia — se non c'è, manca la condivisione e Mate dirà *«No vehicle found on this account».*
 2. **Il certificato TLS dell'app Leapmotor** (`app.crt` + `app.key`). È *uguale per tutti* (identifica l'app, non te) e **non** è incluso in questo repository. Scarica i due file da:
 
    👉 **https://github.com/markoceri/leapmotor-certs**

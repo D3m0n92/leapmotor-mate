@@ -22,7 +22,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.15.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.16.0-dev"  # pre-release build on the test Docker; → "1.16.0" at release (bump with git tag + add-on config.yaml)
 
 import diagnostics
 

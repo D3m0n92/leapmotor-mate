@@ -259,6 +259,20 @@ class MqttService:
                 conf["payload_on"], conf["payload_off"] = "OFF", "ON"
             cfg("binary_sensor", key, conf)
 
+        # Single "Door Lock" TOGGLE (HA `lock` platform): one control that shows the
+        # locked state AND locks/unlocks on tap — so it fits as a single Home-Assistant
+        # button (e.g. a phone front-screen shortcut), GitHub #37. Reuses the `locked`
+        # state topic (ON = locked); LOCK/UNLOCK on `door_lock/set` route to the existing
+        # lock/unlock commands. The separate momentary Lock/Unlock buttons stay for anyone
+        # already using them.
+        cfg("lock", "door_lock", {
+            "name": "Door Lock",
+            "state_topic": f"{prefix}/{vin}/locked",
+            "command_topic": f"{prefix}/{vin}/door_lock/set",
+            "payload_lock": "LOCK", "payload_unlock": "UNLOCK",
+            "state_locked": "ON", "state_unlocked": "OFF",
+        })
+
         for key, name, icon in [
             ("lock", "Lock", "mdi:lock"), ("unlock", "Unlock", "mdi:lock-open"),
             ("open_trunk", "Open Trunk", "mdi:car-back"), ("close_trunk", "Close Trunk", "mdi:car-back"),

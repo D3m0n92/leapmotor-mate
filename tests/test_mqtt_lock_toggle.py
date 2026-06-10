@@ -1,0 +1,106 @@
+"""Single Home Assistant lock toggle over MQTT — GitHub #37.
+
+A `lock` platform entity that shows the locked state AND locks/unlocks on one tap,
+so it works as a single HA button. Covers the discovery config, the command-topic
+routing, and the poller-side dispatch to lock/unlock.
+"""
+import json
+import types
+import importlib.util
+import pathlib
+
+import pytest
+
+pytest.importorskip("paho.mqtt.client", reason="poller MQTT bridge needs paho (absent in minimal CI)")
+import mqtt as M
+
+
+class _FakeClient:
+    def __init__(self):
+        self.published = {}
+
+    def publish(self, topic, payload, retain=False):
+        self.published[topic] = payload
+
+
+def _service():
+    svc = M.MqttService("broker", 1883, get_setting=lambda k, d="": d)
+    svc.client = _FakeClient()
+    return svc
+
+
+# ── discovery ──────────────────────────────────────────────────────────────────
+
+def test_discovery_publishes_a_lock_entity():
+    svc = _service()
+    svc.publish_discovery(types.SimpleNamespace(vin="VINTEST"))
+    topic = "homeassistant/lock/leapmotor_mate_vintest/door_lock/config"
+    assert topic in svc.client.published
+    conf = json.loads(svc.client.published[topic])
+    assert conf["command_topic"] == "leapmotor/VINTEST/door_lock/set"
+    assert conf["state_topic"] == "leapmotor/VINTEST/locked"   # reuses the locked state
+    assert conf["payload_lock"] == "LOCK" and conf["payload_unlock"] == "UNLOCK"
+    assert conf["state_locked"] == "ON" and conf["state_unlocked"] == "OFF"   # ON = locked
+
+
+def test_lock_entity_respects_topic_prefix():
+    svc = M.MqttService("broker", 1883, topic_prefix="myprefix", get_setting=lambda k, d="": d)
+    svc.client = _FakeClient()
+    svc.publish_discovery(types.SimpleNamespace(vin="VINTEST"))
+    topic = "homeassistant/lock/myprefix_mate_vintest/door_lock/config"
+    conf = json.loads(svc.client.published[topic])
+    assert conf["command_topic"] == "myprefix/VINTEST/door_lock/set"
+
+
+# ── command-topic routing (mqtt _on_message) ────────────────────────────────────
+
+def test_set_topic_routes_to_on_command():
+    svc = _service()
+    seen = []
+    svc.on_command = lambda vin, cmd, val: seen.append((vin, cmd, val))
+    msg = types.SimpleNamespace(topic="leapmotor/VIN9/door_lock/set", payload=b"LOCK")
+    svc._on_message(None, None, msg)
+    assert seen == [("VIN9", "door_lock", "LOCK")]
+
+
+# ── poller-side dispatch (poller/main._handle_mqtt_command) ──────────────────────
+
+def _poller_main():
+    """Load poller/main.py under its own name (it collides with web/main.py otherwise)."""
+    path = pathlib.Path(__file__).parents[1] / "poller" / "main.py"
+    spec = importlib.util.spec_from_file_location("poller_main", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _dispatch(value, tmp_path):
+    import db as D
+    pm = _poller_main()
+    api = types.SimpleNamespace(calls=[],
+                                lock_vehicle=lambda vin: api.calls.append(("lock", vin)),
+                                unlock_vehicle=lambda vin: api.calls.append(("unlock", vin)))
+    client = types.SimpleNamespace(_api=api)
+    pubs = []
+    service = types.SimpleNamespace(last_climate_on=None,
+                                    publish_state=lambda vin, k, v: pubs.append((vin, k, v)))
+    db = D.Database(str(tmp_path / "t.db"))
+    pm._handle_mqtt_command(client, service, db, "VIN1", "door_lock", value)
+    return api.calls, pubs
+
+
+def test_dispatch_lock(tmp_path):
+    calls, pubs = _dispatch("LOCK", tmp_path)
+    assert calls == [("lock", "VIN1")]
+    assert ("VIN1", "locked", True) in pubs          # optimistic flip → HA updates at once
+
+
+def test_dispatch_unlock(tmp_path):
+    calls, pubs = _dispatch("UNLOCK", tmp_path)
+    assert calls == [("unlock", "VIN1")]
+    assert ("VIN1", "locked", False) in pubs
+
+
+def test_dispatch_ignores_garbage(tmp_path):
+    calls, pubs = _dispatch("WOBBLE", tmp_path)
+    assert calls == [] and pubs == []

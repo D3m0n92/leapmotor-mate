@@ -11,16 +11,21 @@
     {{ t('wb_show_all') }}
   </label>
   <form hx-post="api/settings/wallbox-entities" hx-target="#wb-entities-result" hx-swap="innerHTML">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <!-- One row per role (Telegram feedback): friendly names are long and get truncated in a
+         2-column grid, so the distinguishing word (Voltage/Power/Energy…) was cut off. Full-width
+         dropdowns + a hover tooltip (on each option AND the closed box) reveal the whole name. -->
+    <div class="grid grid-cols-1 gap-3">
     {% for role in roles %}
     <div>
       <label class="block text-xs text-slate-400 mb-1">{{ t('wb_role_' + role) }}</label>
       <select name="{{ role }}"
+              onchange="this.title=this.options[this.selectedIndex].title"
               class="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-white
                      text-xs focus:outline-none focus:border-brand cursor-pointer">
         <option value="">{{ t('wb_none') }}</option>
         {% for e in entities %}
-        <option value="{{ e.entity_id }}" {% if mapping.get(role) == e.entity_id %}selected{% endif %}>
+        <option value="{{ e.entity_id }}" {% if mapping.get(role) == e.entity_id %}selected{% endif %}
+                title="{{ e.name }}{% if e.unit %} ({{ e.unit }}){% endif %} · {{ e.entity_id }}">
           {{ e.name }}{% if e.unit %} ({{ e.unit }}){% endif %}
         </option>
         {% endfor %}
@@ -29,6 +34,14 @@
     </div>
     {% endfor %}
     </div>
+    <!-- Seed each closed select's tooltip from its current selection so hovering reveals the full
+         mapped entity without opening the dropdown (runs once per htmx swap of this block). -->
+    <script>
+      document.querySelectorAll('#wb-picker select').forEach(function (s) {
+        var o = s.options[s.selectedIndex];
+        if (o) s.title = o.title;
+      });
+    </script>
     <div class="flex items-center justify-between gap-3 pt-3 mt-1">
       <div id="wb-entities-result" class="text-xs"></div>
       <button type="submit"

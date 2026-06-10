@@ -3,6 +3,16 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.7] — 2026-06-11
+
+### Changed
+- **🔌 Readable wallbox entity dropdowns.** Long Home Assistant entity names were truncated in the
+  two-column mapping grid — and the truncated part was exactly the word that tells roles apart
+  (*Voltage* / *Power* / *Energy*). The pickers are now **one per line** (full width), and **hovering
+  shows the whole name** as a tooltip — both on each option in the open list and on the closed box,
+  where it reflects the entity you've mapped (including its full `entity_id`, handy when two sensors
+  look almost identical). *(Suggested by a user on Telegram.)*
+
 ## [1.16.6] — 2026-06-10
 
 ### Added

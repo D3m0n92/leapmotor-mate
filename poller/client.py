@@ -332,6 +332,61 @@ def _is_charging(sig: dict) -> bool:
     return _si(sig, "1149") == 2                    # fallback: connection status "charging"
 
 
+# ── GPS sign memory (GitHub #43) ────────────────────────────────────────────────
+# The signed coordinate pair (signals 2/3) is authoritative, but some cars omit it in
+# certain poll states and we then fall back to the UNSIGNED pair (3724/3725/219x), which is
+# an absolute value — re-flipping west-of-Greenwich / southern-hemisphere cars into the sea
+# (the #30 symptom returns; smalley1992 is the second UK car to hit it). A car can't cross
+# the equator or prime meridian between polls, so we remember the last AUTHORITATIVE sign
+# per VIN and re-apply it to the unsigned magnitude. The memory is only ever written by a
+# signed read, never by the fallback, so it can't be polluted. seed_coord_signs() primes it
+# from a persisted setting on poller startup, so an add-on update / restart doesn't plot the
+# car in the sea until the next signed poll arrives.
+_coord_sign: dict[str, dict[str, float]] = {}
+
+
+def _coerce_float(raw) -> float:
+    if raw in (None, ""):
+        return 0.0
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def seed_coord_signs(vin: str, lat_sign: float = 0.0, lon_sign: float = 0.0) -> None:
+    """Prime the per-VIN GPS sign memory at poller startup. 0 = unknown (leaves it unset)."""
+    if not vin:
+        return
+    mem = _coord_sign.setdefault(vin, {})
+    if lat_sign:
+        mem["lat"] = -1.0 if lat_sign < 0 else 1.0
+    if lon_sign:
+        mem["lon"] = -1.0 if lon_sign < 0 else 1.0
+
+
+def get_coord_signs(vin: str) -> dict:
+    """Current remembered signs for this VIN (only updated by authoritative signed reads)."""
+    return dict(_coord_sign.get(vin, {}))
+
+
+def _resolve_coord(vin: str, axis: str, signed_raw, unsigned_raw) -> float:
+    """Resolve one GPS axis. The signed signal (2/3) is authoritative and refreshes the
+    remembered sign; when only the unsigned signal is present, re-apply the remembered sign
+    to its magnitude (#43). Returns 0.0 when no usable value exists. With no memory yet (a
+    fresh install before any signed poll) the unsigned value is used as-is — unchanged from
+    the pre-#43 behaviour, so east-of-Greenwich cars are never affected."""
+    mem = _coord_sign.setdefault(vin, {})
+    s = _coerce_float(signed_raw)
+    if s != 0.0:
+        mem[axis] = -1.0 if s < 0 else 1.0
+        return s
+    u = _coerce_float(unsigned_raw)
+    if u == 0.0:
+        return 0.0
+    return abs(u) * mem.get(axis, 1.0)
+
+
 def _parse_signal(vin: str, sig: dict) -> VehicleData:
     drive_status = int(sig.get("1941") or 0)
     vehicle_state_code = int(sig.get("1944") or 1)
@@ -356,9 +411,10 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         charge_power_kw=_charge_power_kw(sig),
         # Signals 2/3 carry the SIGNED coordinates; 3724/3725 (and 2190/2191) are unsigned —
         # west-of-Greenwich cars lost the longitude sign there (GitHub #30: Lichfield B10
-        # reports 2=-1.915912 but 3724=+1.915912; on east-of-Greenwich cars 2 == 3724).
-        latitude=float(sig.get("3") or sig.get("3725") or sig.get("2190") or 0),
-        longitude=float(sig.get("2") or sig.get("3724") or sig.get("2191") or 0),
+        # reports 2=-1.915912 but 3724=+1.915912; on east-of-Greenwich cars 2 == 3724). When
+        # a poll omits the signed pair, _resolve_coord re-applies the last known sign (#43).
+        latitude=_resolve_coord(vin, "lat", sig.get("3"), sig.get("3725") or sig.get("2190")),
+        longitude=_resolve_coord(vin, "lon", sig.get("2"), sig.get("3724") or sig.get("2191")),
         outside_temp=None,   # no ambient-temp signal exists (2101 = driverSeatVentilation)
         inside_temp=float(sig.get("1349") or 0),
         climate_target_temp=float(sig.get("2183") or 0),

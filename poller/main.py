@@ -9,7 +9,8 @@ import time
 _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
 import abrp
-from client import LeapmotorMateClient, set_charge_current_min, EmptyStatusError
+from client import (LeapmotorMateClient, set_charge_current_min, EmptyStatusError,
+                    seed_coord_signs, get_coord_signs)
 from db import Database
 from mqtt import MqttService
 from recorder import Recorder
@@ -316,6 +317,17 @@ def main():
 
     log.info("Polling VIN %s (vehicle_id=%d)", v.vin, vehicle_id)
 
+    # GPS sign memory (#43): prime from the last authoritative sign we persisted, so a
+    # restart (e.g. an HA add-on update) doesn't briefly plot west/south cars in the sea
+    # while waiting for the next poll that carries the signed coordinate pair.
+    try:
+        seed_coord_signs(v.vin,
+                         float(db.get_setting("gps_lat_sign", "0") or 0),
+                         float(db.get_setting("gps_lon_sign", "0") or 0))
+    except (TypeError, ValueError):
+        pass
+    _persisted_signs = get_coord_signs(v.vin)
+
     last_relogin = 0.0   # rate-limit guard for session recovery
     mqtt_service = None   # optional MQTT → HA bridge, created lazily when enabled
     empty_status_count = 0  # consecutive "no live signals" responses (car asleep)
@@ -337,6 +349,17 @@ def main():
                 data = client.get_status()
             recorder.process(data)
             _write_comfort_state(db, data)
+
+            # Persist the authoritative GPS sign the moment a signed poll refreshes it (#43),
+            # so the next restart starts on dry land. Only writes when it actually changes
+            # (essentially once), so there's no per-poll DB churn.
+            signs = get_coord_signs(v.vin)
+            if signs != _persisted_signs:
+                if signs.get("lat"):
+                    db.set_setting("gps_lat_sign", str(signs["lat"]))
+                if signs.get("lon"):
+                    db.set_setting("gps_lon_sign", str(signs["lon"]))
+                _persisted_signs = signs
 
             # OTA / software-update check (scans the account inbox) — throttled, best-effort.
             _maybe_check_ota(db, client)

@@ -1449,7 +1449,12 @@ def get_stats_summary() -> dict:
                ROUND(SUM(distance_km), 2)                                    AS total_km,
                ROUND(SUM(distance_km * COALESCE(efficiency_kwh_100km,0)/100), 2) AS total_kwh_used,
                ROUND(SUM(duration_min), 0)                                   AS total_drive_min,
-               ROUND(AVG(efficiency_kwh_100km), 1)                           AS avg_efficiency,
+               -- distance-weighted = total energy / total distance (#42): a simple AVG
+               -- over-weights short trips and disagreed with both the Trips-page header
+               -- and this page's own "energy used ÷ distance". Matches get_trips_summary.
+               ROUND(SUM(distance_km * efficiency_kwh_100km) /
+                     NULLIF(SUM(CASE WHEN efficiency_kwh_100km IS NOT NULL
+                                     THEN distance_km END), 0), 1)           AS avg_efficiency,
                ROUND(MIN(efficiency_kwh_100km), 1)                           AS best_efficiency,
                ROUND(SUM(regen_kwh), 2)                                      AS total_regen_kwh,
                ROUND(AVG(regen_kwh), 2)                                      AS avg_regen_kwh
@@ -1701,15 +1706,27 @@ def get_battery_health(min_soc_delta: float = 12.0) -> dict:
     }
 
 
+# SoC arrives as preciseSoc (signal 100003) with 0.1% resolution, and a ±0.1% parked BMS
+# jitter is real (both up- and down-ticks observed while parked, odometer flat). Worst case
+# each window endpoint is one quantum off, so a window's drop carries up to ±0.2% of pure
+# measurement error — which the %/day extrapolation multiplies by 24/hours (#41).
+SOC_QUANTUM = 0.1
+_DROP_ERR = 2 * SOC_QUANTUM
+
+
 def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
                       lookback_days: int = 90, limit: int = 60) -> dict:
     """Vampire drain = SoC lost while the car is PARKED and NOT charging. Scans the per-poll
     `positions` log, groups consecutive parked-idle samples (charging=0, not moving) into windows
     bounded by any charging or driving — driving is detected by speed OR a rise in odometer between
     idle samples, so a drive that happened during a reporting gap can't be mistaken for drain. Each
-    kept window reports its SoC drop and a normalised %/day rate; windows shorter than `min_hours`
-    or with a drop below `min_drop_pct` (sensor jitter) are discarded. Pure read over data Mate
-    already records every poll — no extra polling, no user input."""
+    kept window reports its SoC drop, a normalised %/day rate, the rate's quantization error band
+    (`rate_err`) and whether the rate is trustworthy (`reliable`: a drop of at least 4 quanta AND
+    an error band within ±1 %/day — short windows extrapolate a single sensor step into several
+    %/day, see #41). Windows shorter than `min_hours` or with a drop below `min_drop_pct` (sensor
+    jitter) are not charted, but every park >= `min_hours` — zero-drop ones included — feeds the
+    time-weighted `typical_pct_per_day` headline. Pure read over data Mate already records every
+    poll — no extra polling, no user input."""
     db = _get()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
     rows = db.execute(
@@ -1719,8 +1736,9 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
     ).fetchall()
 
     windows = []
+    agg = {"drop": 0.0, "hours": 0.0}
 
-    def _flush(w):
+    def _flush(w, ongoing=False):
         if not w:
             return
         t0, t1 = _local_dt(w["t0"]), _local_dt(w["t_last"])
@@ -1728,13 +1746,26 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
             return
         hours = (t1 - t0).total_seconds() / 3600.0
         drop = (w["soc0"] or 0) - (w["soc_last"] or 0)
-        if hours >= min_hours and drop >= min_drop_pct:
+        if hours >= min_hours:
+            # Headline aggregate: every park long enough to measure counts, including zero-drop
+            # ones — a "drain happened"-only sample reads high (selection bias). SoC up-ticks
+            # while parked are BMS jitter, not charging → clamp to 0.
+            agg["hours"] += hours
+            agg["drop"] += max(drop, 0.0)
+        # Compare the rounded drop: raw float drops sit a hair off the threshold
+        # (56.8 − 56.4 = 0.3999…), so identical physical drops would randomly pass/fail.
+        drop_r = round(drop, 1)
+        if hours >= min_hours and drop_r >= min_drop_pct - 1e-9:
+            err = _DROP_ERR / hours * 24
             windows.append({
                 "start": t0.isoformat(), "end": t1.isoformat(),
                 "hours": round(hours, 1),
                 "soc_start": round(w["soc0"], 1), "soc_end": round(w["soc_last"], 1),
-                "drop_pct": round(drop, 1),
+                "drop_pct": drop_r,
                 "pct_per_day": round(drop / hours * 24, 1),
+                "rate_err": round(err, 1),
+                "reliable": drop_r >= 2 * _DROP_ERR - 1e-9 and err <= 1.0,
+                "ongoing": ongoing,
             })
 
     cur = None
@@ -1759,14 +1790,15 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
             cur["soc_last"] = r["soc"]
             if odo is not None:
                 cur["odo_last"] = odo
-    _flush(cur)
+    _flush(cur, ongoing=True)               # the trailing park is still open
 
     windows = windows[-limit:]
-    rates = sorted(w["pct_per_day"] for w in windows)
-    typical = None
-    if rates:
-        n = len(rates)
-        typical = round(rates[n // 2] if n % 2 else (rates[n // 2 - 1] + rates[n // 2]) / 2, 1)
+    # Time-weighted typical (total SoC lost / total parked time): quantization noise cancels
+    # across windows instead of every short park voting like a long one, and slow drain below
+    # the per-window display threshold still surfaces. Spans the whole lookback on purpose —
+    # the headline shouldn't be limited by chart pagination (`limit`). None while nothing is
+    # chartable yet, so young installs keep the no-data state.
+    typical = round(agg["drop"] / agg["hours"] * 24, 1) if windows and agg["hours"] else None
     return {"windows": windows, "count": len(windows),
             "typical_pct_per_day": typical, "lookback_days": lookback_days}
 

@@ -3,6 +3,35 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.5] — 2026-06-10
+
+### Fixed
+- **🦇 No more scary “9 %/day” vampire-drain bars (#41).** The chart normalises every parked window to
+  %/day — so a single 0.1%-resolution SoC step over a short park got multiplied into a huge bar (a real
+  case: −0.4% over 1.1 h → “9.1 %/day”, against a true error band of ±4.4). Short or still-running parks
+  are still recorded, but now render as **pale bars** with the ± uncertainty in the tooltip and a “low
+  confidence (short park)” note; the park still in progress is marked “still parked” with a “…” on its
+  date. Long, trustworthy windows stay solid purple. *(The small drop itself is usually genuine: in the
+  first hour after a drive the car hasn’t reached deep sleep yet — that’s a few hundred watts, briefly.
+  It’s the ×22 extrapolation to a daily rate that was misleading.)*
+- **📍 The map no longer drifts back into the sea for UK / west-of-Greenwich cars (#43).** The signed-sign
+  fix from v1.15.0 (#30) is still in place, but some cars omit the signed coordinate in certain poll states
+  (and a restart — e.g. an add-on update — forgot what it had learned), so Mate fell back to the *unsigned*
+  value and a Lichfield car jumped out to the North Sea again. Mate now **remembers which hemisphere your
+  car is in** and re-applies it whenever a poll sends only the unsigned coordinate — and it persists that
+  across restarts. East-of-Greenwich cars are unaffected.
+
+### Changed
+- **The “typical idle drain” headline is now time-weighted** — total SoC lost ÷ total parked time, across
+  *all* parks of at least an hour **including the ones that lost nothing** (which the old median quietly
+  skipped, so it overstated drain: a real install read 1.9 %/day where the honest figure is 0.8). If the
+  number drops after updating, that’s the correction — not a change in your car.
+- **“Average efficiency” now means the same thing on every page (#42).** The Statistics overview showed a
+  plain average of each trip’s efficiency, while the Trips page showed a distance-weighted one — so the
+  same trips read e.g. 16.6 vs 19.1 kWh/100 km, and the Statistics figure didn’t even match its own
+  “energy used ÷ distance”. Both pages now use the distance-weighted value (total energy ÷ total distance),
+  which is the physically correct fleet average and what other EV apps report.
+
 ## [1.16.4] — 2026-06-10
 
 ### Fixed

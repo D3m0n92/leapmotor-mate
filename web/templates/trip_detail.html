@@ -13,7 +13,9 @@
   </h1>
   <a href="trips/{{ trip.id }}/route.gpx" download
      class="ml-auto border border-slate-600 text-slate-300 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-brand flex-shrink-0">↓ {{ t('export_gpx') }}</a>
-  <button hx-delete="{{ trip.id }}" hx-confirm="{{ t('trip_delete_confirm') }}"
+  {# full path: relative URLs resolve against <base href> (the app root), so a bare
+     "{{ trip.id }}" became DELETE /<id> → 404 and the button silently did nothing #}
+  <button hx-delete="trips/{{ trip.id }}" hx-confirm="{{ t('trip_delete_confirm') }}"
           class="border border-red-900/60 text-red-400 text-xs font-medium rounded-lg px-3 py-1.5 hover:border-red-500 hover:bg-red-500/10 flex-shrink-0">
     🗑 {{ t('trip_delete') }}</button>
 </div>

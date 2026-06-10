@@ -3,6 +3,37 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.0] — 2026-06-10
+
+### Added
+- **⚙️ Advanced settings** (Settings → Advanced, collapsed by default). Three tunables for edge cases, with
+  sane defaults and a Reset: the **missed-charge SoC threshold** (the battery-% jump that counts as a charge
+  Mate missed while the car was asleep), the **vampire-drain noise floor** (parked SoC drops smaller than this
+  are treated as sensor noise), and the **AC/DC power threshold** (raise it if you have a 22 kW AC wallbox so
+  its sessions aren't labelled DC). “The defaults suit most users — change these only if you know why.”
+- **🔎 Recover missed charges** (Settings → Diagnostics). A one-time scan of your history for charges that
+  happened while the car was asleep, *before* automatic detection existed, and were never logged — it **shows
+  you what it found before adding anything**, and is safe to re-run (no duplicates).
+- **🔋 Battery capacity is now editable** (Settings). Pre-filled per model; edit it if yours differs, or click
+  **“use measured”** to adopt the value Mate worked out from your own charges. Changing it never rewrites past
+  charges, and your battery-health % keeps measuring against the original spec.
+- **🔒 Single “Door Lock” toggle for Home Assistant.** A proper MQTT *lock* entity that shows the locked state
+  **and** locks/unlocks in one tap — so it fits as a single dashboard or phone front-screen button. The
+  separate Lock/Unlock buttons stay for anyone already using them.
+
+### Changed
+- **🔋 Battery capacity defaults are now the usable (net) figures**, not the gross pack — T03 36.0, B10 Pro
+  55.0 / Pro Max 65.0, C10 69.9 / 81.9 kWh. Existing installs keep whatever they had configured (nothing is
+  silently changed); the new editable field + “use measured” let you fine-tune to your own car.
+
+### Fixed
+- **🔄 Command tiles no longer get stuck after a lock / trunk / climate command (#34).** The command worked,
+  but the few-seconds-later check read the cloud before the car had reported the new state, decided the command
+  “hadn’t taken”, and saved that stale reading — so the tile (and even a page reload) kept showing the old
+  state until you tapped again or hit Refresh. Mate now **waits for the car to actually confirm** the change
+  (and never saves an unconfirmed reading in the meantime), the tile flips instantly on the first tap, and
+  back-to-back commands can’t clobber each other.
+
 ## [1.15.0] — 2026-06-10
 
 ### Added

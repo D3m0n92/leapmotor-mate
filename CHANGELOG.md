@@ -3,6 +3,17 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.1] — 2026-06-10
+
+### Fixed
+- **Controls the car locks while moving no longer misbehave — sunshade, boot, windows and door-lock.**
+  These can't be operated in motion (the official app shows the same notice), and the sunshade's state
+  signal is unreliable at speed — which could make the **Panoramic Roof** tile briefly read *“closed”*
+  while it was actually open. The Commands page now shows a **“car in motion” banner** over those controls
+  while driving, and pressing one returns a clear **“Vehicle in motion — … disabled”** notice instead of
+  firing a command the car would only reject. Climate and comfort controls are unaffected — they work
+  while driving.
+
 ## [1.16.0] — 2026-06-10
 
 ### Added

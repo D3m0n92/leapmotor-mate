@@ -1,5 +1,6 @@
-# HA add-on build: BUILD_FROM is overridden by build.json per architecture
-# Standalone test: uses python:3.12-slim default
+# Builds the GHCR image (docker-publish.yml, multi-arch amd64+arm64 via buildx).
+# The HA add-on PULLS this prebuilt image, so there's no per-arch build override any more —
+# always the slim base. BUILD_FROM stays overridable for ad-hoc local builds only.
 ARG BUILD_FROM=python:3.12-slim
 FROM ${BUILD_FROM}
 

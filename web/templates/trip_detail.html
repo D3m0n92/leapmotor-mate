@@ -32,7 +32,7 @@
         </div>
         <div>
           <div class="stat-label">{{ t('duration') }}</div>
-          <div class="stat-value">{{ "%.0f"|format(trip.duration_min or 0) }}<span class="text-base font-normal text-slate-400"> min</span></div>
+          <div class="stat-value">{{ fmt_dur(trip.duration_min) }}</div>
         </div>
         <div>
           <div class="stat-label">{{ t('efficiency') }}</div>

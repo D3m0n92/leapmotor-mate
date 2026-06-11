@@ -262,8 +262,6 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
             {% set soc_start = c.start_soc or 0 %}
             {% set soc_end   = c.end_soc   or 0 %}
             {% set soc_delta = soc_end - soc_start %}
-            {% set dur_h     = ((c.duration_min or 0) // 60)|int %}
-            {% set dur_m     = ((c.duration_min or 0) % 60)|int %}
 
             <div data-charge-id="{{ c.id }}" class="charge-card"
                  style="background:#060e1a;border:1px solid #111c2e;border-radius:12px;padding:16px">
@@ -281,7 +279,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
                     <div class="text-[11px] text-emerald-400/90 mt-0.5">⚡ {{ t('charge_actual_window') }} {{ c.active_window.real_start }} → {{ c.active_window.real_end }}</div>
                     {% endif %}
                     <div class="text-slate-500 text-xs mt-0.5">
-                      ⏱ {% if dur_h > 0 %}{{ dur_h }}h {% endif %}{{ dur_m }}min
+                      ⏱ {{ fmt_dur(c.duration_min) }}
                       {% if c.max_power_kw %}· {{ "%.1f"|format(c.max_power_kw) }} kW peak{% endif %}
                       {% set is_dc = c.charge_type == 'DC' or (c.charge_type is none and (c.max_power_kw or 0) > 11) %}
                       · <span style="color:{% if is_dc %}#fb923c{% else %}#38bdf8{% endif %};font-weight:700">{% if is_dc %}DC{% else %}AC{% endif %}</span>

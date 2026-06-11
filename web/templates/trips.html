@@ -166,7 +166,7 @@
                     </span>
                     {% if trip.is_merged %}<span style="font-size:10px" class="text-yellow-400" title="{{ trip.merged_count }} {{ t('merge_segments') }}">🔗</span>{% endif %}
                   </div>
-                  <div class="text-slate-500 text-xs">{{ "%.0f"|format(trip.duration_min or 0) }} min{% if trip.is_merged %} · {{ t('driving_only') }}{% endif %}</div>
+                  <div class="text-slate-500 text-xs">{{ fmt_dur(trip.duration_min) }}{% if trip.is_merged %} · {{ t('driving_only') }}{% endif %}</div>
                 </div>
 
                 <!-- SOC mini gauge -->

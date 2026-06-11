@@ -22,7 +22,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.16.11"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.16.12"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 
@@ -143,6 +143,18 @@ def _state_color(pos: dict) -> str:
     if _driving(pos): return "text-blue-400"
     return "text-green-400"
 
+def _fmt_dur(minutes) -> str:
+    """Readable duration: '10h 19m' from an hour up, '45 min' below, '—' when missing —
+    so a long charge reads as hours, not a bare '619 min'."""
+    try:
+        m = int(round(float(minutes)))
+    except (TypeError, ValueError):
+        return "—"
+    if m < 60:
+        return f"{m} min"
+    return f"{m // 60}h {m % 60:02d}m"
+
+
 def _ctx(**kwargs):
     """Add shared helpers + i18n to every template context."""
     lang = db_reader.get_language()
@@ -156,7 +168,7 @@ def _ctx(**kwargs):
             "wallbox_enabled": db_reader.get_setting("wallbox_enabled", "0") == "1",
             "currency": db_reader.get_currency(), "auth_enabled": auth.enabled(),
             "soc_color": _soc_color, "state_label": state_label, "state_color": _state_color,
-            "is_driving": _driving}
+            "is_driving": _driving, "fmt_dur": _fmt_dur}
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────

@@ -246,6 +246,7 @@ class Database:
         self._repair_odometer_trips()
         self._repair_quantized_trip_distance()
         self._repair_snap_to_full_charges()
+        self._drop_phantom_charges()
         self.migrate_secrets()
         self._check_decryption()
         log.info("Database ready: %s", path)
@@ -372,6 +373,23 @@ class Database:
         self.set_setting("charges_soc_snap_repair_v1", "1")
         if fixed:
             log.info("Snap-to-full charge repair: %d charge(s) recomputed", fixed)
+
+    def _drop_phantom_charges(self) -> None:
+        """One-time cleanup mirroring the live finalize_charge guard: remove charges already in the
+        DB that delivered NOTHING — no SoC gained AND no wallbox-measured energy — left by a brief
+        plug / charge-state blip (e.g. a charge schedule change, signal 1149 flicking 0→2→0) before
+        the guard existed. STRICTLY deliver-nothing: any SoC gain (energy_added_kwh) OR any wallbox
+        energy (ac_energy_kwh) keeps the row, so a real charge is never touched. Runs once."""
+        if self.get_setting("charges_phantom_cleanup_v1") == "1":
+            return
+        n = self._conn.execute(
+            "DELETE FROM charges WHERE ended_at IS NOT NULL AND COALESCE(reconstructed, 0) = 0 "
+            "AND COALESCE(energy_added_kwh, 0) <= 0.05 AND COALESCE(ac_energy_kwh, 0) <= 0.05"
+        ).rowcount
+        self.set_setting("charges_phantom_cleanup_v1", "1")
+        self._conn.commit()
+        if n:
+            log.info("Phantom-charge cleanup: dropped %d empty charge(s) (no SoC, no wallbox energy)", n)
 
     # ── Settings ─────────────────────────────────────────────────────────────
 
@@ -703,6 +721,19 @@ class Database:
             if last is not None:
                 soc_for_energy = last
         energy_added = max((soc_for_energy - start_soc) / 100.0 * self.get_battery_capacity(), 0)
+
+        # Phantom-charge guard: a brief plug / charge-state blip — e.g. the car re-evaluating after
+        # a charge SCHEDULE is changed, or signal 1149 flicking 0→2→0 — can open+close a "charge"
+        # that delivered nothing. If it gained no SoC AND the wallbox measured no energy, it isn't a
+        # real session: drop the row instead of persisting a phantom charge (a genuine charge always
+        # shows one or the other). Reconstructed charges have energy by definition, so never here.
+        ac_kwh = charge["ac_energy_kwh"]
+        if energy_added <= 0.05 and (ac_kwh is None or ac_kwh <= 0.05) and not charge["reconstructed"]:
+            self._conn.execute("DELETE FROM charges WHERE id = ?", (charge_id,))
+            self._conn.commit()
+            log.info("Charge #%d dropped — phantom (no SoC gained, no wallbox energy)", charge_id)
+            return
+
         # Above this power the session is DC fast-charging. Default 11 kW (3-phase AC ceiling
         # for most home wallboxes); a 22 kW AC owner can raise it in Advanced settings so their
         # AC sessions aren't misread as DC.

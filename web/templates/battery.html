@@ -29,10 +29,21 @@
 
 <!-- Trend chart -->
 <div class="card mb-5">
-  <div class="text-sm font-semibold text-white mb-1">{{ t('battery_trend_title') }}</div>
+  <div class="flex items-center justify-between gap-2 mb-1">
+    <div class="text-sm font-semibold text-white">{{ t('battery_trend_title') }}</div>
+    <div class="flex gap-1 text-xs flex-shrink-0">
+      <button type="button" id="soh-x-time" onclick="sohSetX('time')"
+              class="px-2.5 py-1 rounded-md border border-brand text-white bg-slate-700">{{ t('battery_axis_time') }}</button>
+      <button type="button" id="soh-x-dist" onclick="sohSetX('dist')"
+              class="px-2.5 py-1 rounded-md border border-slate-600 text-slate-300 hover:text-white">{{ t('battery_axis_distance') }}</button>
+    </div>
+  </div>
   <div id="soh-chart" style="height:340px"></div>
 </div>
 
+{% if health.excluded_count %}
+<p class="text-xs text-slate-500 leading-relaxed mb-2">{{ t('battery_soh_cold_note').format(n=health.temp_min_c|int) }}</p>
+{% endif %}
 <p class="text-xs text-slate-500 leading-relaxed">{{ t('battery_method') }}</p>
 
 <script>
@@ -42,36 +53,68 @@
   var pts = {{ health.points | tojson }};
   var nominal = {{ health.nominal_kwh }};
   var typeColor = { HOME: '#22c55e', AC: '#60a5fa', FAST: '#fb923c', DC: '#fb923c', HPC: '#e879f9', FREE: '#a3e635' };
-  var data = pts.map(function (p) {
-    return { x: new Date(p.ts).getTime(), y: p.capacity_kwh,
-             soh: p.soh_pct, delta: p.soc_delta, energy: p.energy_kwh, type: p.charge_type || 'AC' };
-  });
-  el._c = new ApexCharts(el, {
-    chart: { type: 'scatter', height: 340, fontFamily: 'inherit', background: 'transparent',
-             zoom: { enabled: true }, toolbar: { show: false } },
-    series: [{ name: '{{ t('battery_est_capacity') }}', data: data }],
-    colors: ['#38bdf8'],
-    markers: { size: 6, strokeWidth: 0,
-               discrete: data.map(function (d, i) {
-                 return { seriesIndex: 0, dataPointIndex: i, fillColor: typeColor[d.type] || '#38bdf8', size: 6 };
-               }) },
-    xaxis: { type: 'datetime', labels: { style: { colors: '#94a3b8' } },
-             axisBorder: { color: '#334155' }, axisTicks: { color: '#334155' } },
-    yaxis: { min: Math.round(nominal * 0.6), max: Math.round(nominal * 1.1),
-             labels: { style: { colors: '#94a3b8' }, formatter: function (v) { return v.toFixed(0); } },
-             title: { text: 'kWh', style: { color: '#64748b' } } },
-    grid: { borderColor: '#1e293b' },
-    annotations: { yaxis: [{ y: nominal, borderColor: '#475569', strokeDashArray: 5,
-                   label: { text: '{{ t('battery_nominal') }} ' + nominal + ' kWh',
-                            style: { background: '#334155', color: '#e2e8f0', fontSize: '10px' } } }] },
-    tooltip: { theme: 'dark', x: { format: 'dd MMM yyyy' },
-               y: { formatter: function (v, o) {
-                 var d = data[o.dataPointIndex];
-                 return v + ' kWh  ·  ' + (d.soh != null ? d.soh + '% SoH' : '') +
-                        '  ·  +' + d.delta + '% / ' + d.energy + ' kWh (' + d.type + ')';
-               }, title: { formatter: function () { return ''; } } } }
-  });
-  el._c.render();
+  var COLD = 'rgba(100,116,139,0.5)';   // faded slate — cold charges, shown but excluded from the figure
+  var mode = 'time', curData = [];
+  function dataFor(m) {
+    return pts.map(function (p) {
+      return { x: m === 'dist' ? p.odometer_km : new Date(p.ts).getTime(), y: p.capacity_kwh,
+               soh: p.soh_pct, delta: p.soc_delta, end: p.end_soc, energy: p.energy_kwh,
+               temp: p.temp_c, type: p.charge_type || 'AC', cold: p.excluded };
+    }).filter(function (d) { return d.x != null && d.y != null; });
+  }
+  function build() {
+    curData = dataFor(mode);
+    var xaxis = (mode === 'dist')
+      ? { type: 'numeric', labels: { style: { colors: '#94a3b8' },
+            formatter: function (v) { return Math.round(v).toLocaleString() + ' km'; } },
+          axisBorder: { color: '#334155' }, axisTicks: { color: '#334155' } }
+      : { type: 'datetime', labels: { style: { colors: '#94a3b8' } },
+          axisBorder: { color: '#334155' }, axisTicks: { color: '#334155' } };
+    if (el._c) { el._c.destroy(); }
+    el._c = new ApexCharts(el, {
+      chart: { type: 'scatter', height: 340, fontFamily: 'inherit', background: 'transparent',
+               zoom: { enabled: true }, toolbar: { show: false } },
+      series: [{ name: '{{ t('battery_est_capacity') }}', data: curData }],
+      colors: ['#38bdf8'],
+      markers: { size: 6, strokeWidth: 0,
+                 discrete: curData.map(function (d, i) {
+                   return { seriesIndex: 0, dataPointIndex: i, size: 6,
+                            fillColor: d.cold ? COLD : (typeColor[d.type] || '#38bdf8') };
+                 }) },
+      xaxis: xaxis,
+      yaxis: { min: Math.round(nominal * 0.6), max: Math.round(nominal * 1.1),
+               labels: { style: { colors: '#94a3b8' }, formatter: function (v) { return v.toFixed(0); } },
+               title: { text: 'kWh', style: { color: '#64748b' } } },
+      grid: { borderColor: '#1e293b' },
+      annotations: { yaxis: [{ y: nominal, borderColor: '#475569', strokeDashArray: 5,
+                     label: { text: '{{ t('battery_nominal') }} ' + nominal + ' kWh',
+                              style: { background: '#334155', color: '#e2e8f0', fontSize: '10px' } } }] },
+      tooltip: { theme: 'dark',
+                 x: (mode === 'dist')
+                    ? { formatter: function (v) { return Math.round(v).toLocaleString() + ' km'; } }
+                    : { format: 'dd MMM yyyy' },
+                 y: { formatter: function (v, o) {
+                   var d = curData[o.dataPointIndex] || {};
+                   var s = v + ' kWh  ·  ' + (d.soh != null ? d.soh + '% SoH' : '') +
+                           '  ·  +' + d.delta + '% → ' + (d.end != null ? d.end + '%' : '') +
+                           ' / ' + d.energy + ' kWh (' + d.type + ')';
+                   if (d.temp != null) s += '  ·  ' + d.temp + '°C';
+                   if (d.cold) s += '  ·  {{ t('battery_cold_excluded') }}';
+                   return s;
+                 }, title: { formatter: function () { return ''; } } } }
+    });
+    el._c.render();
+  }
+  window.sohSetX = function (m) {
+    if (m === mode) return;
+    mode = m;
+    var on = 'px-2.5 py-1 rounded-md border border-brand text-white bg-slate-700';
+    var off = 'px-2.5 py-1 rounded-md border border-slate-600 text-slate-300 hover:text-white';
+    document.getElementById('soh-x-time').className = (m === 'time') ? on : off;
+    document.getElementById('soh-x-dist').className = (m === 'dist') ? on : off;
+    build();
+  };
+  build();
 })();
 </script>
 

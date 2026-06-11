@@ -3,6 +3,18 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.16.10] — 2026-06-11
+
+### Changed
+- **🔋 Sharper Battery health (SoH) trend.** The state‑of‑health estimate no longer follows the
+  seasons: **cold charges are shown but excluded** from the figure (an LFP pack reads low when cold,
+  so a winter session isn't real ageing — threshold configurable via `soh_temp_min_c`, default 15 °C),
+  and **charges that end near 100% weigh the most** (the BMS recalibrates the SoC there, so their SoC
+  delta — and the estimate — is the most trustworthy). The trend chart gains a **Time / Distance
+  toggle** to separate calendar ageing from cycle (per‑km) ageing; each point now carries its battery
+  temperature and odometer, and excluded points appear faded with the reason in the tooltip. The
+  *Settings → "use measured" capacity* value benefits from the same cleaner estimate. EN/IT/FR/DE.
+
 ## [1.16.9] — 2026-06-11
 
 ### Added

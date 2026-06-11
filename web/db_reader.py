@@ -1650,12 +1650,38 @@ def _integrate_charge_energy_kwh(db, start: str, end: str | None) -> float:
     return energy
 
 
-def get_battery_health(min_soc_delta: float = 12.0) -> dict:
-    """Estimate usable battery capacity / state-of-health over time from charge
-    sessions. For each charge with a meaningful SoC rise we integrate the measured
-    DC energy and divide by the SoC delta → estimated full-pack capacity. Noisy
-    single sessions are expected, so the headline SoH is smoothed over the most
-    recent points. Charges whose telemetry was pruned (no samples) are skipped."""
+def _charge_temp_odo(db, start: str, end: str | None):
+    """Coldest battery temperature (°C) and the odometer (km) seen WHILE CHARGING in a session,
+    from the positions log. The min temp is the conservative basis for the cold-charge gate; the
+    odometer gives the per-distance (cycle-ageing) axis of the SoH trend."""
+    if end:
+        rows = db.execute(
+            "SELECT battery_min_temp, odometer_km FROM positions WHERE charging = 1 "
+            "AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at", (start, end)).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT battery_min_temp, odometer_km FROM positions WHERE charging = 1 "
+            "AND recorded_at >= ? ORDER BY recorded_at", (start,)).fetchall()
+    temps = [r["battery_min_temp"] for r in rows if r["battery_min_temp"] is not None]
+    odos = [r["odometer_km"] for r in rows if r["odometer_km"] is not None]
+    return (min(temps) if temps else None), (max(odos) if odos else None)
+
+
+def get_battery_health(min_soc_delta: float = 12.0, temp_min_c: float | None = None) -> dict:
+    """Estimate usable battery capacity / state-of-health over time from charge sessions. For
+    each charge with a meaningful SoC rise we integrate the measured DC energy and divide by the
+    SoC delta → estimated full-pack capacity.
+
+    Two LFP-specific refinements keep the trend honest:
+    - **Cold charges are shown but excluded** from the headline/trend. A cold LFP pack delivers
+      less and its BMS SoC drifts, so a winter session reads low — that's temperature, not ageing.
+      Charges whose min battery temp is below `temp_min_c` (Settings `soh_temp_min_c`, default 15°C)
+      get `excluded: True` and don't feed the figure, but stay in `points` for the chart.
+    - **Charges ending near 100% weigh most** in the headline: the BMS recalibrates SoC near full,
+      so their SoC delta — and therefore the estimate — is the most trustworthy.
+
+    Single sessions are noisy, so the headline is a weighted mean over the most recent valid ones.
+    Charges with no stored telemetry (pruned) are skipped entirely."""
     db = _get()
     # SoH is measured-vs-as-new, so the denominator is the ORIGINAL spec capacity, not
     # the energy-calc capacity the user may have overridden — otherwise adopting a
@@ -1665,6 +1691,11 @@ def get_battery_health(min_soc_delta: float = 12.0) -> dict:
         nominal = float(get_setting("battery_capacity_nominal_kwh", "") or get_battery_capacity_kwh())
     except (TypeError, ValueError):
         nominal = get_battery_capacity_kwh()
+    if temp_min_c is None:
+        try:
+            temp_min_c = float(get_setting("soh_temp_min_c", "15") or 15)
+        except (TypeError, ValueError):
+            temp_min_c = 15.0
     rows = db.execute(
         "SELECT id, started_at, ended_at, start_soc, end_soc, charge_type "
         "FROM charges WHERE ended_at IS NOT NULL AND start_soc IS NOT NULL "
@@ -1682,6 +1713,8 @@ def get_battery_health(min_soc_delta: float = 12.0) -> dict:
         # Drop physically implausible estimates (sampling gaps, bad V/I spikes).
         if not (nominal * 0.5 <= est <= nominal * 1.15):
             continue
+        temp, odo = _charge_temp_odo(db, r["started_at"], r["ended_at"])
+        cold = temp is not None and temp < temp_min_c
         dt = _local_dt(r["started_at"])
         points.append({
             "charge_id": r["id"],
@@ -1690,17 +1723,35 @@ def get_battery_health(min_soc_delta: float = 12.0) -> dict:
             "capacity_kwh": round(est, 1),
             "soh_pct": round(est / nominal * 100, 1) if nominal else None,
             "soc_delta": round(delta, 1),
+            "end_soc": round(r["end_soc"], 1) if r["end_soc"] is not None else None,
             "energy_kwh": round(energy, 2),
+            "temp_c": round(temp, 1) if temp is not None else None,
+            "odometer_km": round(odo) if odo is not None else None,
             "charge_type": r["charge_type"],
+            "excluded": cold,
+            "exclude_reason": "cold" if cold else None,
         })
-    # Smoothed headline = mean of the last up-to-5 estimates (reduces per-session noise).
-    tail = points[-5:]
-    latest_cap = round(sum(p["capacity_kwh"] for p in tail) / len(tail), 1) if tail else None
-    latest_soh = round(latest_cap / nominal * 100, 1) if (latest_cap and nominal) else None
+    valid = [p for p in points if not p["excluded"]]
+
+    # Weight a session by how close it ended to a full (BMS-recalibrated) 100% — that's where the
+    # LFP SoC is trustworthy, so its SoC delta (and the estimate) carries the least error.
+    def _w(p):
+        es = p.get("end_soc")
+        return 1.0 if es is None else max(0.25, min(1.0, (es - 50.0) / 50.0))
+
+    tail = valid[-5:]                                  # weighted mean of the recent valid estimates
+    if tail:
+        wsum = sum(_w(p) for p in tail)
+        latest_cap = round(sum(p["capacity_kwh"] * _w(p) for p in tail) / wsum, 1)
+        latest_soh = round(latest_cap / nominal * 100, 1) if nominal else None
+    else:
+        latest_cap = latest_soh = None
     return {
         "nominal_kwh": round(nominal, 1),
         "points": points,
-        "sample_count": len(points),
+        "sample_count": len(valid),
+        "excluded_count": len(points) - len(valid),
+        "temp_min_c": round(temp_min_c, 1),
         "latest_capacity_kwh": latest_cap,
         "latest_soh_pct": latest_soh,
     }

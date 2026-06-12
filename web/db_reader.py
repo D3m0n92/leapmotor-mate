@@ -1125,16 +1125,25 @@ def get_trip_detail(trip_id: int) -> Optional[dict]:
     trip_d["cost_per_kwh"] = None
     if trip_d["energy_kwh"]:
         rate_row = db.execute(
-            "SELECT cost, energy_added_kwh FROM charges "
+            "SELECT cost, energy_added_kwh, ac_energy_kwh, location_type FROM charges "
             "WHERE ended_at IS NOT NULL AND ended_at <= ? "
             "  AND cost IS NOT NULL AND energy_added_kwh > 0 "
             "ORDER BY ended_at DESC LIMIT 1",
             (trip["started_at"],),
         ).fetchone()
-        if rate_row and rate_row["energy_added_kwh"]:
-            rate = rate_row["cost"] / rate_row["energy_added_kwh"]
-            trip_d["cost_per_kwh"] = round(rate, 4)
-            trip_d["cost"] = round(trip_d["energy_kwh"] * rate, 2)
+        if rate_row:
+            # €/kWh = the charge's cost ÷ the SAME energy that cost was billed on (see
+            # compute_cost): the wallbox AC energy for HOME charges, the battery (DC/SoC)
+            # energy otherwise. Dividing a HOME charge's AC-billed cost by the battery
+            # energy overstated the rate (AC > DC by the charging losses), inflating every
+            # trip's cost on a wallbox install (GitHub #51).
+            ac = rate_row["ac_energy_kwh"]
+            basis = ac if (rate_row["location_type"] == "HOME" and ac and ac > 0) \
+                else rate_row["energy_added_kwh"]
+            if basis and basis > 0:
+                rate = rate_row["cost"] / basis
+                trip_d["cost_per_kwh"] = round(rate, 4)
+                trip_d["cost"] = round(trip_d["energy_kwh"] * rate, 2)
 
     return {
         **trip_d,

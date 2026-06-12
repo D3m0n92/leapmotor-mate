@@ -3,6 +3,16 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.18.1] — 2026-06-12
+
+### Fixed
+- **Trip cost on a wallbox install.** A trip's cost is derived from the €/kWh of the last
+  charge before it. That rate divided the charge's cost by the **battery (DC/SoC) energy**, but
+  HOME charges are billed on the (larger) **wallbox AC energy** — so the rate, and every trip's
+  cost, was overstated by the charging losses (and by more when a charge ended near 100%). It now
+  divides by the **same energy the cost was billed on** (AC for HOME, battery otherwise), so a
+  trip's €/kWh matches your real tariff. *(Reported by @riri19, #51.)*
+
 ## [1.18.0] — 2026-06-12
 
 ### Added

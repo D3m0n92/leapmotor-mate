@@ -14,6 +14,16 @@ fi
 export DB_PATH="${DB_PATH:-/data/leapmotor_mate.db}"
 export CERT_DIR="/app/certs"
 
+# Keep the temporary files the Leapmotor API writes — the per-login account TLS cert + key
+# (tempfile.mkstemp, suffix -leapmotor-cert.pem / -leapmotor-key.pem) — on the PERSISTENT /data
+# volume instead of the container's ephemeral /tmp. A standalone Docker (e.g. on a NAS) wipes
+# /tmp on every restart, so those two files would vanish and remote commands would then fail with
+# "Could not find the TLS certificate file" (and every restart would force a fresh re-login). /data
+# survives restarts. Guarded: if /data/tmp can't be created, TMPDIR is left as-is (falls back to /tmp).
+if mkdir -p /data/tmp 2>/dev/null; then
+  export TMPDIR=/data/tmp
+fi
+
 echo "[LeapMotor Mate] Starting..."
 echo "[LeapMotor Mate] DB: ${DB_PATH}"
 echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"

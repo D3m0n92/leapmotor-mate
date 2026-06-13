@@ -7,7 +7,7 @@ States and intervals:
   PARKED_ALERT   15s     — something changed (door/lock/temp): drive imminent
   DRIVING        10s     — speed > 0 or gear D
   CHARGING       60s     — plugged in
-  OFFLINE        15 min  — API unreachable after 3 consecutive errors
+  OFFLINE        parked  — cloud unreachable; keeps the parked cadence (re-login rate-limited 60s)
 
 Transitions (all independent of HA and phone):
   UNKNOWN/OFFLINE     → PARKED_ACTIVE  first successful poll
@@ -55,7 +55,6 @@ class State(Enum):
 # and keeps Mate independent (no HA/boost needed to catch a trip start). User-tunable.
 DEFAULT_POLL_PARKED  = 30
 DEFAULT_POLL_DRIVING = 10
-OFFLINE_INTERVAL     = 900   # back off when the API is unreachable
 
 _PARKED_STATES = {State.PARKED_SLEEP, State.PARKED_ACTIVE, State.PARKED_ALERT}
 
@@ -186,8 +185,10 @@ class StateMachine:
     def poll_interval(self) -> int:
         if self.state in (State.DRIVING, State.PARKED_ALERT):
             return self.poll_driving        # active / drive imminent → fast
-        if self.state == State.OFFLINE:
-            return OFFLINE_INTERVAL
         if self.state == State.UNKNOWN:
             return min(self.poll_parked, 30)
-        return self.poll_parked             # PARKED_SLEEP/ACTIVE, CHARGING
+        # OFFLINE (cloud unreachable) keeps the user's parked cadence too — we never
+        # hide-throttle to a long fixed backoff: a flaky car↔cloud link (or a sleeping car)
+        # must be re-caught the moment it returns, so no trip start is lost. The re-login
+        # attempt stays separately rate-limited to once/60s (see poller/main).
+        return self.poll_parked             # OFFLINE / PARKED_SLEEP / PARKED_ACTIVE / CHARGING

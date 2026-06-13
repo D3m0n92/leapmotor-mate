@@ -887,13 +887,10 @@ class Database:
                 self._conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
                 log.warning("Trip #%d had no usable positions — deleted", trip_id)
             else:
-                distance_km = sum(
-                    haversine_km(
-                        positions[i]["latitude"], positions[i]["longitude"],
-                        positions[i + 1]["latitude"], positions[i + 1]["longitude"],
-                    )
-                    for i in range(len(positions) - 1)
-                )
+                # Filter (0,0)/null-island and out-of-range fixes before summing — a single bad
+                # point slipping in before a crash would otherwise add a virtual round-trip to the
+                # equator and wreck the trip's distance. Mirrors the normal path (_gps_track_km).
+                distance_km = _gps_track_km(positions)
                 start_soc = trip["start_soc"] or 0
                 end_soc   = float(last_pos["soc"] or start_soc)
                 energy    = (start_soc - end_soc) / 100.0 * self.get_battery_capacity()

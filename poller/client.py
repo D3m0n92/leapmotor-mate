@@ -390,15 +390,12 @@ def _resolve_coord(vin: str, axis: str, signed_raw, unsigned_raw) -> float:
 
 
 def _parse_signal(vin: str, sig: dict) -> VehicleData:
-    drive_status = int(sig.get("1941") or 0)
-    vehicle_state_code = int(sig.get("1944") or 1)
-
-    if drive_status in (1, 2, 4, 7) or vehicle_state_code in (1, 2, 4):
-        vehicle_state = "parked"
-    elif drive_status in (3, 5) or vehicle_state_code == 5:
-        vehicle_state = "driving"
-    else:
-        vehicle_state = "parked"
+    gear      = _GEAR_MAP.get(int(sig.get("1010") or 0), "P")
+    speed_kmh = float(sig.get("1319") or 0)
+    # parked/driving from GEAR + SPEED (the trusted motion inputs the trip state machine also
+    # uses), NOT signal 1941 — that's acAirVolume (AC fan speed): a fan level of 3 or 5 while the
+    # car was parked used to be misread as "driving" and published to HA (MQTT) / ABRP.
+    vehicle_state = "driving" if (gear in ("D", "R", "N") or speed_kmh > 1) else "parked"
 
     return VehicleData(
         vin=vin,
@@ -406,8 +403,8 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         soc=float(sig.get("100003") or sig.get("1204") or 0),
         range_km=float(sig.get("3260") or 0),
         odometer_km=float(sig.get("1318") or 0),
-        speed_kmh=float(sig.get("1319") or 0),
-        gear=_GEAR_MAP.get(int(sig.get("1010") or 0), "P"),
+        speed_kmh=speed_kmh,
+        gear=gear,
         vehicle_state=vehicle_state,
         charging_status=1 if _is_charging(sig) else 0,
         charge_power_kw=_charge_power_kw(sig),

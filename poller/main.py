@@ -332,6 +332,7 @@ def main():
     last_relogin = 0.0   # rate-limit guard for session recovery
     mqtt_service = None   # optional MQTT → HA bridge, created lazily when enabled
     empty_status_count = 0  # consecutive "no live signals" responses (car asleep)
+    poll_error_count   = 0  # consecutive hard API errors (cloud unreachable) — for quiet logging
 
     while True:
         try:
@@ -402,6 +403,7 @@ def main():
             )
             recorder.mark_online()
             empty_status_count = 0
+            poll_error_count = 0
         except KeyboardInterrupt:
             log.info("Stopped by user")
             break
@@ -426,9 +428,16 @@ def main():
                             "reports again.", interval)
             # already backed off (count > 3): stay quiet so a sleeping car can't spam the log
         except Exception as exc:
-            log.error("Poll error: %s", exc)
+            poll_error_count += 1
             recorder.mark_offline()
             interval = recorder.poll_interval
+            # With no long offline backoff we keep polling at the user's cadence, so log the first
+            # few errors in full then go quiet — a prolonged cloud outage must not spam the log.
+            if poll_error_count <= 3:
+                log.error("Poll error: %s", exc)
+            elif poll_error_count == 4:
+                log.warning("Cloud still unreachable — still polling every %ds, quiet from here; "
+                            "recovers automatically when it responds.", interval)
             # Self-heal: a vanished /tmp account-cert file (or an auth/token/connection
             # drop) makes every poll fail forever — the poller used to just keep erroring.
             # Force a fresh login to re-create the cert. Guarded to ~once/min so a rapid

@@ -9,6 +9,7 @@ retry also calls api.login, so this intercepts every login path.
 
 Fully defensive: any failure falls back to a normal login — the app never breaks.
 """
+import base64
 import json
 import logging
 import os
@@ -29,9 +30,54 @@ def _db_path() -> str:
     return os.environ.get("DB_PATH", "leapmotor_mate.db")
 
 
+def _stable_paths():
+    """Fixed-name copies of the account cert/key on the persistent volume. The API writes
+    them as PER-LOGIN tempfiles that later get cleaned up — once gone, session reuse used to
+    fail and both processes re-logged in forever (GitHub #54). A fixed name we own survives,
+    so the other process always finds a valid cert without a fresh login."""
+    d = os.environ.get("TMPDIR") or "/tmp"
+    return os.path.join(d, "mate-account-cert.pem"), os.path.join(d, "mate-account-key.pem")
+
+
+def _read_bytes(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _write_bytes(path, data) -> None:
+    with open(path, "wb") as f:
+        f.write(data)
+    try:
+        os.chmod(path, 0o600)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _save(api) -> None:
     try:
         blob = {a: getattr(api, a, None) for a in _ATTRS}
+        # Copy the API's per-login account cert/key to stable, fixed-name files we own and
+        # re-point the live api at them; also stash the bytes so a vanished file can be
+        # re-created on restore. Without this the tempfiles get cleaned up and reuse breaks,
+        # forcing a re-login every cycle -> token-eviction storm + cloud throttling (#54).
+        cert_b = _read_bytes(getattr(api, "account_cert_file", None) or "")
+        key_b = _read_bytes(getattr(api, "account_key_file", None) or "")
+        if cert_b and key_b:
+            sc, sk = _stable_paths()
+            try:
+                _write_bytes(sc, cert_b)
+                _write_bytes(sk, key_b)
+                api.account_cert_file = sc
+                api.account_key_file = sk
+                blob["account_cert_file"] = sc
+                blob["account_key_file"] = sk
+            except Exception as e:  # noqa: BLE001
+                log.debug("stable cert copy failed: %s", e)
+            blob["account_cert_b64"] = base64.b64encode(cert_b).decode()
+            blob["account_key_b64"] = base64.b64encode(key_b).decode()
         blob["ts"] = time.time()
         c = sqlite3.connect(_db_path(), timeout=5)
         c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('shared_session', ?)",
@@ -55,8 +101,19 @@ def _restore(api) -> bool:
     if not b.get("token") or time.time() - b.get("ts", 0) > _TTL:
         return False
     acf, akf = b.get("account_cert_file"), b.get("account_key_file")
-    if not acf or not akf or not os.path.exists(acf) or not os.path.exists(akf):
+    if not acf or not akf:
         return False
+    # Re-create the cert/key if they vanished — the root cause of the re-login storm (#54):
+    # the API's per-login tempfile gets cleaned up, so reuse used to bail out to a full login.
+    if not os.path.exists(acf) or not os.path.exists(akf):
+        cb, kb = b.get("account_cert_b64"), b.get("account_key_b64")
+        if not cb or not kb:
+            return False
+        try:
+            _write_bytes(acf, base64.b64decode(cb))
+            _write_bytes(akf, base64.b64decode(kb))
+        except Exception:  # noqa: BLE001
+            return False
     try:
         for a in _ATTRS:
             setattr(api, a, b.get(a))

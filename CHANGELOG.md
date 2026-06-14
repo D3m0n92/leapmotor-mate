@@ -3,6 +3,18 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.20.2] — 2026-06-14
+
+### Fixed
+- **Remote commands no longer get stuck on "Token is invalid" after heavy use.** The account
+  TLS certificate Leapmotor issues at login is a short‑lived temp file; once it got cleaned up,
+  the poller and the web process could no longer reuse the shared session and re‑logged in on
+  **every cycle** — a login storm the Leapmotor cloud then throttled ("Information verification
+  failed, please try again later"), so remote commands failed with *Token is invalid*. Mate now
+  copies that certificate to a stable file and can re‑create it from the saved session, so the
+  shared session survives a vanished temp file and the re‑login storm is gone. (Reported by
+  @riri19, #54. Note: the Leapmotor cloud also needs at least ~10 s between remote commands.)
+
 ## [1.20.1] — 2026-06-14
 
 ### Added

@@ -259,6 +259,18 @@
 
   <!-- Main -->
   <main class="flex-1 overflow-y-auto">
+    {% if demo %}
+    <!-- Demo banner — sticky at the TOP of the content so it never covers the sidebar nav
+         (the old fixed bottom bar hid Settings/Logout). Stays visible while scrolling. -->
+    <div id="demo-bar" style="position:sticky;top:0;z-index:1005;background:#f59e0b;
+         color:#0f172a;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;
+         padding:8px 14px;font-size:13px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.3)">
+      <span>🧪 {{ t('demo_banner') }}</span>
+      <button type="button" id="demo-exit-btn" onclick="exitDemo()"
+              style="background:#0f172a;color:#fff;border:0;border-radius:8px;padding:6px 12px;
+                     font-size:12px;font-weight:700;cursor:pointer">{{ t('demo_exit') }}</button>
+    </div>
+    {% endif %}
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
       {% block content %}{% endblock %}
     </div>
@@ -320,6 +332,45 @@
       }, secs * 1000);
     })();
   </script>
+
+  {% if demo %}
+  <script>
+    function exitDemo() {
+      const btn = document.getElementById('demo-exit-btn');
+      btn.disabled = true; btn.style.opacity = '0.6';
+      fetch('api/demo/disable', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.restarting) demoWaitRestart({{ t('demo_exiting') | tojson }}); })
+        .catch(() => { btn.disabled = false; btn.style.opacity = '1'; });
+    }
+    function demoWaitRestart(msg) {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0f172a;display:flex;'
+        + 'flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#e2e8f0;'
+        + 'text-align:center;padding:24px';
+      ov.innerHTML = '<div style="width:42px;height:42px;border:4px solid #334155;'
+        + 'border-top-color:#14b8a6;border-radius:50%;animation:lmspin 1s linear infinite"></div>'
+        + '<div style="font-size:15px">' + msg + '</div>'
+        + '<style>@keyframes lmspin{to{transform:rotate(360deg)}}</style>';
+      document.body.appendChild(ov);
+      const home = (document.querySelector('base') || {}).href || './';
+      // Poll the MODE until the container is back as a normal (non-demo) app, then go home.
+      // Robust to a sub-second restart that an up/down probe would miss.
+      let tries = 0;
+      const poll = () => {
+        tries++;
+        fetch('api/demo/status', { cache: 'no-store' })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => {
+            if (d.demo === false || tries > 75) { window.location.href = home; return; }
+            setTimeout(poll, 1000);
+          })
+          .catch(() => { if (tries > 75) { window.location.href = home; return; } setTimeout(poll, 1000); });
+      };
+      setTimeout(poll, 1200);
+    }
+  </script>
+  {% endif %}
 
 </body>
 </html>

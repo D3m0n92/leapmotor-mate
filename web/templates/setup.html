@@ -16,7 +16,7 @@
   <!-- Logo -->
   <div class="text-center mb-8">
     <div class="inline-flex items-center gap-3 mb-4">
-      <div class="w-12 h-12 rounded-xl bg-brand flex items-center justify-center text-white font-bold text-lg">LM</div>
+      <img src="static/mate-icon.svg" alt="LeapMotor Mate" class="w-12 h-12 rounded-xl">
       <div class="text-left">
         <div class="text-xl font-bold text-white">LeapMotor</div>
         <div class="text-brand font-semibold text-sm">Mate</div>
@@ -44,6 +44,23 @@
     <h1 id="setup-title" class="text-2xl font-bold text-white mb-1">Welcome to LeapMotor Mate</h1>
     <p id="setup-subtitle" class="text-slate-400 text-sm">Configure your vehicle connection to get started</p>
   </div>
+
+  <!-- ── Landing: choose "set up my car" vs "try the demo" (first screen) ───── -->
+  <div id="choice-step">
+    <button type="button" onclick="chooseSetup()"
+            class="w-full flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3.5 text-base font-semibold text-white hover:bg-teal-500 transition-colors mb-3">
+      <span>▶</span><span id="choice-setup-label">Set up my car</span>
+    </button>
+    <button type="button" id="demo-cta-btn" onclick="startDemo()"
+            class="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3.5 text-base font-semibold text-amber-300 hover:bg-amber-400/20 transition-colors disabled:opacity-60">
+      <span>🧪</span><span id="demo-cta-label">Try the demo</span>
+    </button>
+    <p id="demo-cta-note" class="text-[11px] text-slate-500 mt-3 text-center">Sample data only — nothing is real. You can exit anytime.</p>
+  </div>
+
+  <!-- Back to the landing (shown only once the setup/cert form is revealed) -->
+  <button type="button" id="back-link" onclick="backToChoice()" style="display:none"
+          class="mb-4 text-sm text-slate-400 hover:text-white">← <span id="back-label">Back</span></button>
 
   <!-- ── Step 1: App certificate ──────────────────────────────────────────── -->
   <div id="cert-step" style="display:none">
@@ -190,7 +207,7 @@ const BATTERY_OPTIONS = {
 const strings = {
   en: {
     title:         "Welcome to LeapMotor Mate",
-    subtitle:      "Configure your vehicle connection to get started",
+    subtitle:      "Choose how to get started",
     email:         "Leapmotor account email",
     emailPh:       "you@example.com",
     password:      "Password",
@@ -219,10 +236,15 @@ const strings = {
     certSaved:     "✓ Certificate saved",
     certCrtLabel:  "app.crt (certificate)",
     certKeyLabel:  "app.key (private key)",
+    setupChoice:   "Set up my car",
+    back:          "Back",
+    demoBtn:       "Try the demo",
+    demoNote:      "Sample data only — nothing is real. You can exit anytime.",
+    demoStarting:  "Starting the demo…",
   },
   it: {
     title:         "Benvenuto in LeapMotor Mate",
-    subtitle:      "Configura la connessione al tuo veicolo per iniziare",
+    subtitle:      "Scegli come iniziare",
     email:         "Email account Leapmotor",
     emailPh:       "tu@esempio.com",
     password:      "Password",
@@ -251,10 +273,15 @@ const strings = {
     certSaved:     "✓ Certificato salvato",
     certCrtLabel:  "app.crt (certificato)",
     certKeyLabel:  "app.key (chiave privata)",
+    setupChoice:   "Configura la mia auto",
+    back:          "Indietro",
+    demoBtn:       "Prova la demo",
+    demoNote:      "Solo dati di esempio — niente è reale. Puoi uscire quando vuoi.",
+    demoStarting:  "Avvio della demo…",
   },
   fr: {
     title:         "Bienvenue sur LeapMotor Mate",
-    subtitle:      "Configurez la connexion à votre véhicule pour commencer",
+    subtitle:      "Choisissez comment commencer",
     email:         "E-mail du compte Leapmotor",
     emailPh:       "vous@exemple.com",
     password:      "Mot de passe",
@@ -283,10 +310,15 @@ const strings = {
     certSaved:     "✓ Certificat enregistré",
     certCrtLabel:  "app.crt (certificat)",
     certKeyLabel:  "app.key (clé privée)",
+    setupChoice:   "Configurer ma voiture",
+    back:          "Retour",
+    demoBtn:       "Essayer la démo",
+    demoNote:      "Données d'exemple uniquement — rien n'est réel. Vous pouvez quitter à tout moment.",
+    demoStarting:  "Démarrage de la démo…",
   },
   de: {
     title:         "Willkommen bei LeapMotor Mate",
-    subtitle:      "Richten Sie die Verbindung zu Ihrem Fahrzeug ein, um zu starten",
+    subtitle:      "Wählen Sie, wie Sie starten möchten",
     email:         "E-Mail des Leapmotor-Kontos",
     emailPh:       "sie@beispiel.com",
     password:      "Passwort",
@@ -315,6 +347,11 @@ const strings = {
     certSaved:     "✓ Zertifikat gespeichert",
     certCrtLabel:  "app.crt (Zertifikat)",
     certKeyLabel:  "app.key (privater Schlüssel)",
+    setupChoice:   "Mein Auto einrichten",
+    back:          "Zurück",
+    demoBtn:       "Demo ausprobieren",
+    demoNote:      "Nur Beispieldaten — nichts ist echt. Sie können jederzeit beenden.",
+    demoStarting:  "Demo wird gestartet…",
   },
 };
 
@@ -392,6 +429,10 @@ function setLang(lang) {
   document.getElementById('cert-toggle-mode').textContent = certPasteMode ? s.certToFile : s.certToPaste;
   document.getElementById('lbl-crt').textContent          = s.certCrtLabel;
   document.getElementById('lbl-key').textContent          = s.certKeyLabel;
+  document.getElementById('choice-setup-label').textContent = s.setupChoice;
+  document.getElementById('demo-cta-label').textContent     = s.demoBtn;
+  document.getElementById('demo-cta-note').textContent      = s.demoNote;
+  document.getElementById('back-label').textContent         = s.back;
 
   const active   = 'px-4 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer bg-brand/20 border-brand text-brand';
   const inactive = 'px-4 py-1.5 rounded-full text-sm font-medium border transition-all cursor-pointer border-slate-600 text-slate-400 hover:border-slate-400';
@@ -399,6 +440,57 @@ function setLang(lang) {
   document.getElementById('btn-it').className = lang === 'it' ? active : inactive;
   document.getElementById('btn-fr').className = lang === 'fr' ? active : inactive;
   document.getElementById('btn-de').className = lang === 'de' ? active : inactive;
+}
+
+// ── Demo mode ─────────────────────────────────────────────────────────────────
+// Enter demo from inside Mate: write the flag server-side, then the container restarts
+// into demo and we send the browser to the dashboard once it's back up.
+async function startDemo() {
+  const s = strings[currentLang];
+  const btn = document.getElementById('demo-cta-btn');
+  btn.disabled = true;
+  document.getElementById('demo-cta-label').textContent = s.demoStarting;
+  try {
+    const r = await fetch('api/demo/enable', { method: 'POST' });
+    const d = await r.json();
+    if (d.restarting) { waitForRestart(s.demoStarting, true); return; }
+    // Not restarting (already configured) — restore the button.
+    btn.disabled = false;
+    document.getElementById('demo-cta-label').textContent = s.demoBtn;
+  } catch (err) {
+    btn.disabled = false;
+    document.getElementById('demo-cta-label').textContent = s.demoBtn;
+  }
+}
+
+// Full-screen overlay shown during the restart. Polls /api/demo/status until THIS container
+// has come back in the target mode (demo=true after enable), then navigates home. Polling the
+// MODE — not an up/down transition — is robust to a sub-second restart that "down then up"
+// detection would miss (which left the spinner hanging). Resolves home against <base> so it
+// works under HA ingress.
+function waitForRestart(msg, wantDemo) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0f172a;display:flex;'
+    + 'flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#e2e8f0;'
+    + 'text-align:center;padding:24px';
+  ov.innerHTML = '<div style="width:42px;height:42px;border:4px solid #334155;'
+    + 'border-top-color:#14b8a6;border-radius:50%;animation:lmspin 1s linear infinite"></div>'
+    + '<div style="font-size:15px">' + msg + '</div>'
+    + '<style>@keyframes lmspin{to{transform:rotate(360deg)}}</style>';
+  document.body.appendChild(ov);
+  const home = (document.querySelector('base') || {}).href || './';
+  let tries = 0;
+  const poll = () => {
+    tries++;
+    fetch('api/demo/status', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        if (!!d.demo === wantDemo || tries > 75) { window.location.href = home; return; }
+        setTimeout(poll, 1000);
+      })
+      .catch(() => { if (tries > 75) { window.location.href = home; return; } setTimeout(poll, 1000); });
+  };
+  setTimeout(poll, 1200);   // let the 1.2s server-side restart timer fire first
 }
 
 // ── Battery selector ──────────────────────────────────────────────────────────
@@ -600,8 +692,12 @@ const initLang = navigator.language.startsWith('it') ? 'it'
                : navigator.language.startsWith('de') ? 'de' : 'en';
 setLang('{{ prefill.language if prefill else "" }}' || initLang);
 
-// Show the cert step first unless the certificate is already present.
-(async () => {
+// ── Landing choice ────────────────────────────────────────────────────────────
+// "Set up my car" reveals the cert/login form (cert step first unless already present);
+// the account form is never shown to a demo-curious user until they choose to configure.
+async function chooseSetup() {
+  document.getElementById('choice-step').style.display = 'none';
+  document.getElementById('back-link').style.display = 'inline-block';
   try {
     const r = await fetch('api/setup/cert-status');
     const d = await r.json();
@@ -614,7 +710,16 @@ setLang('{{ prefill.language if prefill else "" }}' || initLang);
     // On error, fall back to showing the login form (cert may be bundled)
     document.getElementById('setup-form').style.display = 'block';
   }
-})();
+}
+
+function backToChoice() {
+  document.getElementById('cert-step').style.display = 'none';
+  document.getElementById('setup-form').style.display = 'none';
+  document.getElementById('back-link').style.display = 'none';
+  document.getElementById('choice-step').style.display = 'block';
+}
+
+// The landing (#choice-step) is visible by default — nothing else is revealed on load.
 </script>
 
 </body>

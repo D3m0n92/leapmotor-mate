@@ -38,3 +38,30 @@ def test_install_patches_when_on(monkeypatch):
     demo.install(cc)                          # flag on → cloud calls neutered
     assert cc.get_fresh_signals() is None
     assert cc._session.execute() == (True, "demo")
+
+
+# ── In-app demo toggle (flag file read by run.sh at boot) ──────────────────────
+
+def test_flag_path_next_to_db(monkeypatch, tmp_path):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "leapmotor_mate.db"))
+    assert demo.flag_path() == str(tmp_path / "demo.flag")
+
+
+def test_set_flag_writes_and_removes(monkeypatch, tmp_path):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "leapmotor_mate.db"))
+    flag = tmp_path / "demo.flag"
+    assert not flag.exists()
+    demo.set_flag(True)
+    assert flag.exists()
+    demo.set_flag(False)
+    assert not flag.exists()
+    demo.set_flag(False)          # idempotent — removing a missing flag must not raise
+
+
+def test_flag_path_identical_in_normal_and_demo_db(monkeypatch, tmp_path):
+    # run.sh derives the flag from the NORMAL DB_PATH; the in-demo exit button runs with the
+    # demo DB_PATH. Both must resolve to the same file or exit would not clear what boot reads.
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "leapmotor_mate.db"))
+    normal = demo.flag_path()
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "demo.db"))
+    assert demo.flag_path() == normal

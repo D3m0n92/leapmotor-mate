@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -23,7 +24,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.21.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.21.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -146,6 +147,7 @@ def _driving(pos: dict) -> bool:
 def _state_color(pos: dict) -> str:
     if pos.get("charging"): return "text-yellow-400"
     if _driving(pos): return "text-blue-400"
+    if pos.get("plug_connected"): return "text-teal-300"   # cable in, not actively charging
     return "text-green-400"
 
 def _fmt_dur(minutes) -> str:
@@ -174,6 +176,10 @@ def _ctx(**kwargs):
     def state_label(pos: dict) -> str:
         if pos.get("charging"): return t("state_charging")
         if _driving(pos): return t("state_driving")
+        # Charge finished (or paused) but the cable is still plugged in — don't read as a plain
+        # "Parked"; surface that the car is still connected.
+        if pos.get("plug_connected"):
+            return t("state_charge_complete") if pos.get("charge_completed") else t("state_plugged")
         return t("state_parked")
     return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION, "demo": _IS_DEMO,
             "update": update_check.get_update_status(MATE_VERSION),
@@ -2351,6 +2357,42 @@ _EU_BATTERY_MAP: dict[str, list[dict]] = {
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):
     return templates.TemplateResponse(request, "setup.html", {})
+
+
+def _restart_container() -> None:
+    """Exit the process so run.sh stops the container and HA/Docker recreate it — the same
+    mechanism the poller uses on an account switch (poller/main.py). On the next boot run.sh
+    re-reads the demo flag and starts in the right mode. Delayed briefly so the HTTP response
+    is flushed to the browser first."""
+    threading.Timer(1.2, lambda: os._exit(0)).start()
+
+
+@app.post("/api/demo/enable")
+async def demo_enable():
+    """Enter demo mode from inside Mate (the setup screen's 'Try the demo' button), then
+    restart into it. Guarded to a not-yet-configured install and a non-demo process, so it
+    can never replace a real, set-up dashboard by accident."""
+    if _IS_DEMO or db_reader.is_setup_complete():
+        return JSONResponse({"ok": False, "restarting": False})
+    demo.set_flag(True)
+    _restart_container()
+    return JSONResponse({"ok": True, "restarting": True})
+
+
+@app.post("/api/demo/disable")
+async def demo_disable():
+    """Leave demo mode (the in-demo exit banner) and restart into the normal app."""
+    demo.set_flag(False)
+    _restart_container()
+    return JSONResponse({"ok": True, "restarting": True})
+
+
+@app.get("/api/demo/status")
+async def demo_status():
+    """Current mode of THIS process. The browser polls it after enable/disable to know the
+    container has come back in the target mode — robust regardless of how fast the restart is
+    (polling for an up/down transition can miss a sub-second restart)."""
+    return JSONResponse({"demo": _IS_DEMO})
 
 
 _DATA_CERT_DIR = os.environ.get("DATA_CERT_DIR", "/data/certs")

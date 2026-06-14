@@ -2,6 +2,10 @@
 
 _T: dict[str, dict[str, str]] = {
     "en": {
+        # Demo mode (in-app toggle)
+        "demo_banner":   "Demo mode — sample data, no real car.",
+        "demo_exit":     "Exit demo & set up my car",
+        "demo_exiting":  "Leaving demo…",
         # Comfort — read-only state sensors (work on B10 even where the command doesn't)
         "comfort_section":       "Comfort",
         "comfort_seat_heat_driver":      "Left seat heat",
@@ -297,6 +301,8 @@ _T: dict[str, dict[str, str]] = {
         "state_parked":    "Parked",
         "state_driving":   "Driving",
         "state_charging":  "Charging",
+        "state_plugged":         "Cable connected",
+        "state_charge_complete": "Charge complete",
         # Status card
         "battery":         "Battery",
         "range":           "Range",
@@ -700,6 +706,10 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "it": {
+        # Demo mode (in-app toggle)
+        "demo_banner":   "Modalità demo — dati di esempio, nessuna auto reale.",
+        "demo_exit":     "Esci dalla demo e configura la mia auto",
+        "demo_exiting":  "Uscita dalla demo…",
         # Comfort — sensori di stato in sola lettura
         "comfort_section":       "Comfort",
         "comfort_seat_heat_driver":      "Risc. sedile sx",
@@ -995,6 +1005,8 @@ _T: dict[str, dict[str, str]] = {
         "state_parked":    "Park",
         "state_driving":   "In guida",
         "state_charging":  "In ricarica",
+        "state_plugged":         "Cavo collegato",
+        "state_charge_complete": "Carica completa",
         # Status card
         "battery":         "Batteria",
         "range":           "Autonomia",
@@ -1398,6 +1410,10 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "fr": {
+        # Demo mode (in-app toggle)
+        "demo_banner":   "Mode démo — données d'exemple, aucune voiture réelle.",
+        "demo_exit":     "Quitter la démo et configurer ma voiture",
+        "demo_exiting":  "Sortie de la démo…",
         # Comfort — capteurs d'état en lecture seule
         "comfort_section":       "Confort",
         "comfort_seat_heat_driver":      "Chauf. siège g.",
@@ -1693,6 +1709,8 @@ _T: dict[str, dict[str, str]] = {
         "state_parked":    "Stationné",
         "state_driving":   "En conduite",
         "state_charging":  "En charge",
+        "state_plugged":         "Câble branché",
+        "state_charge_complete": "Charge terminée",
         # Status card
         "battery":         "Batterie",
         "range":           "Autonomie",
@@ -2096,6 +2114,10 @@ _T: dict[str, dict[str, str]] = {
         "lang_de":              "Deutsch",
     },
     "de": {
+        # Demo mode (in-app toggle)
+        "demo_banner":   "Demo-Modus — Beispieldaten, kein echtes Auto.",
+        "demo_exit":     "Demo verlassen & mein Auto einrichten",
+        "demo_exiting":  "Demo wird beendet…",
         # Comfort — schreibgeschützte Zustandssensoren
         "comfort_section":       "Komfort",
         "comfort_seat_heat_driver":      "Sitzhzg. links",
@@ -2391,6 +2413,8 @@ _T: dict[str, dict[str, str]] = {
         "state_parked":    "Geparkt",
         "state_driving":   "Fahrt",
         "state_charging":  "Lädt",
+        "state_plugged":         "Kabel angeschlossen",
+        "state_charge_complete": "Laden abgeschlossen",
         # Status card
         "battery":         "Batterie",
         "range":           "Reichweite",

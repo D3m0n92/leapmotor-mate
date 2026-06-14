@@ -24,6 +24,15 @@ if mkdir -p /data/tmp 2>/dev/null; then
   export TMPDIR=/data/tmp
 fi
 
+# In-app demo toggle: the "Try the demo" button on Mate's setup screen (and the in-demo
+# exit banner) write/remove a flag file on the persistent volume, next to the DB. This lets
+# a user enter/leave demo from INSIDE Mate — no command line, no add-on configuration —
+# which the add-on configuration tab can't offer discoverably. Either this flag OR an
+# explicit MATE_DEMO=1 (standalone) turns demo on.
+if [ -z "${MATE_DEMO}" ] && [ -f "$(dirname "${DB_PATH}")/demo.flag" ]; then
+  export MATE_DEMO=1
+fi
+
 # ── Demo mode (MATE_DEMO=1): bundled sample data, no account/cloud, web only ──
 # Lets anyone explore Mate's pages with a realistic fake month before configuring
 # their car. Regenerates a fresh "last 30 days" sample DB on every start.

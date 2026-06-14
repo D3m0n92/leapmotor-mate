@@ -26,7 +26,7 @@ LeapMotor Mate is free and open-source, developed in my spare time. If it's usef
 
 ## Features
 
-- **🆕 Demo mode** — explore the whole app on a realistic, self‑contained month of **sample data** (commutes, home + DC fast charging, costs, battery health, a weekend trip) with **no car or account needed**: `docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate`, then open <http://localhost:4000>. _All data is purely demonstrative — nothing is real._
+- **🆕 Demo mode** — explore the whole app on a realistic, self‑contained month of **sample data** (commutes, home + DC fast charging, costs, battery health, a weekend trip) with **no car or account needed**. On first launch just click **"Try the demo"** on the welcome screen — **one click, no command line**, so it works straight from the Home Assistant add‑on too. (Standalone, you can also run `docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate` and open <http://localhost:4000>.) A **DEMO** badge is shown throughout and *"Exit demo & set up my car"* takes you to the real setup. _All data is purely demonstrative — nothing is real._
 - **Overview** — live status, battery, range, **READY state**, location map, vehicle picture.
 - **At-a-glance status** — the Overview's first card now also shows a **Security** indicator (green **Active** when the car is locked and its alarm is armed) and, while the cable's still plugged in after a completed charge, a **Fully charged** badge.
 - **Trips** — automatic trip detection with route map, distance, energy, efficiency and regen. Each trip also shows its **total kWh consumed** and its **cost** (energy × the price per kWh of the last charge before the trip, in your currency). You can **delete a trip** (with confirmation) to drop bad data, or **merge trips** that a short, non-charging stop split apart — pick the joinable pairs with a gap slider, preview the combined route, and it's fully reversible (Unmerge any time).
@@ -86,7 +86,7 @@ The data lives in a local SQLite database. Nothing is sent anywhere except to th
 
 ## Installation
 
-> **▶️ Just want to see what Mate can do?** Try the **demo** first — a realistic month of sample data, **no car or account needed**:
+> **▶️ Just want to see what Mate can do?** Try the **demo** first — a realistic month of sample data, **no car or account needed**. Install it (add‑on or Docker), open Mate and click **"Try the demo"** on the welcome screen — **no command line**. Or run it standalone:
 >
 > ```bash
 > docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate
@@ -138,7 +138,7 @@ The database is stored in `./data/` (mounted at `/data` in the container).
 
 ## Setup wizard
 
-The first launch walks you through two steps:
+The first launch opens on a choice — **Set up my car** or **Try the demo**. Choosing *Set up my car* walks you through two steps:
 
 1. **Certificate** — upload `app.crt` and `app.key` (or paste their PEM text). Get them from [markoceri/leapmotor-certs](https://github.com/markoceri/leapmotor-certs). Stored persistently in `/data/certs`.
 2. **Login** — your Leapmotor account email, password and operation **PIN**. The wizard auto‑detects your model and battery (EU spec).
@@ -259,7 +259,7 @@ LeapMotor Mate è gratuito e open-source, sviluppato nel tempo libero. Se ti è 
 
 ## Funzionalità
 
-- **🆕 Modalità demo** — esplora tutta l'app su un mese realistico e autonomo di **dati di esempio** (pendolarismo, ricarica casa + DC fast, costi, salute batteria, un weekend al mare) **senza auto né account**: `docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate`, poi apri <http://localhost:4000>. _I dati sono puramente dimostrativi — niente è reale._
+- **🆕 Modalità demo** — esplora tutta l'app su un mese realistico e autonomo di **dati di esempio** (pendolarismo, ricarica casa + DC fast, costi, salute batteria, un weekend al mare) **senza auto né account**. Al primo avvio basta cliccare **"Prova la demo"** nella schermata di benvenuto — **un clic, niente riga di comando**, quindi funziona direttamente anche dall'add‑on Home Assistant. (Standalone puoi anche usare `docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate` e aprire <http://localhost:4000>.) Un badge **DEMO** è sempre visibile e *"Esci dalla demo e configura la mia auto"* ti porta al setup reale. _I dati sono puramente dimostrativi — niente è reale._
 - **Panoramica** — stato live, batteria, autonomia, **stato READY**, mappa posizione, immagine del veicolo.
 - **Stato a colpo d'occhio** — la prima scheda della Panoramica mostra ora anche un indicatore **Sicurezza** (verde **Attiva** quando l'auto è chiusa e l'allarme è inserito) e, finché il cavo è ancora collegato dopo una ricarica completata, un badge **Carica completa**.
 - **Viaggi** — rilevamento automatico con mappa del percorso, distanza, energia, efficienza e regen. Ogni viaggio mostra anche i **kWh totali consumati** e il **costo** (energia × prezzo per kWh dell'ultima ricarica prima del viaggio, nella tua valuta). Puoi **eliminare un viaggio** (con conferma) per togliere dati sbagliati, o **unire viaggi** separati da una sosta breve senza ricarica — scegli le coppie unibili con uno slider, vedi l'anteprima del percorso combinato, ed è totalmente reversibile (Separa quando vuoi).
@@ -314,7 +314,7 @@ I dati restano in un database SQLite locale. Nulla viene inviato altrove se non 
 
 ## Installazione
 
-> **▶️ Vuoi solo vedere cosa sa fare Mate?** Prova prima la **demo** — un mese realistico di dati di esempio, **senza auto né account**:
+> **▶️ Vuoi solo vedere cosa sa fare Mate?** Prova prima la **demo** — un mese realistico di dati di esempio, **senza auto né account**. Installala (add‑on o Docker), apri Mate e clicca **"Prova la demo"** nella schermata di benvenuto — **niente riga di comando**. Oppure eseguila standalone:
 >
 > ```bash
 > docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate
@@ -364,7 +364,7 @@ Il database è salvato in `./data/` (montato su `/data` nel container).
 
 ## Wizard di setup
 
-Al primo avvio due passi:
+Al primo avvio compare una scelta — **Configura la mia auto** o **Prova la demo**. Scegliendo *Configura la mia auto*, due passi:
 
 1. **Certificato** — carica `app.crt` e `app.key` (oppure incolla il testo PEM). Li trovi su [markoceri/leapmotor-certs](https://github.com/markoceri/leapmotor-certs). Salvati in modo persistente in `/data/certs`.
 2. **Login** — email account Leapmotor, password e **PIN** operativo. Il wizard rileva automaticamente modello e batteria (spec. EU).

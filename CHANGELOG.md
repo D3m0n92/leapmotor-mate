@@ -3,6 +3,34 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.21.1] — 2026-06-14
+
+### Added
+- **Try the demo from inside Mate — no command line needed.** The setup screen now opens on a simple
+  choice — **"Set up my car"** or **"Try the demo"**. Picking the demo turns it on and restarts straight
+  into it; an amber banner at the top of every page lets you leave again (*"Exit demo & set up my car"*).
+  So a Home Assistant **add-on** user can explore the sample‑data demo with **one click**, instead of
+  needing `-e MATE_DEMO=1` on the command line (which still works for standalone Docker). The in‑demo
+  restart waits for the container to come back in the right mode before reloading, so it never hangs.
+- **Overview — status‑aware quick‑command icons.** The lock / trunk / windows buttons on the car image
+  now mirror the live state: **unlocked** highlights amber, **locked** highlights green, an **open trunk
+  turns red**, **open windows** highlight violet — the car's state is readable at a glance.
+- **Overview — "cable connected / charge complete" state.** When a charge finishes (or pauses) with the
+  cable still plugged in, the car no longer just reads *"Parked"*: it shows **"Cable connected · NN%"** on
+  the car image (with the plug icon) plus a **"Charge complete"** status, in the teal charge colour. The
+  percentage is the real battery SoC; unplugging the cable returns to the normal parked view.
+
+### Changed
+- The setup screen leads with the car/demo choice; the Leapmotor account login and the app‑certificate
+  step now appear only **after** choosing *"Set up my car"* (with a **Back** link). The in‑app logo now
+  uses Mate's car icon — matching the Docker/add‑on icon — instead of the old "LM" placeholder.
+
+### Security
+- **Never bundle the app TLS certificate in the image.** The shared app cert (`certs/app.crt` / `app.key`,
+  provided by the user at setup) was already git‑ignored and **absent from the published image**, but a
+  *local* `docker build` from a working dir that had the files would have copied them in. They're now in
+  `.dockerignore` as well, so a local build can never accidentally bundle them.
+
 ## [1.21.0] — 2026-06-14
 
 ### Added

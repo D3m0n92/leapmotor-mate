@@ -12,6 +12,31 @@ def is_demo() -> bool:
     return os.environ.get("MATE_DEMO", "") not in ("", "0", "false", "False", "no")
 
 
+def flag_path() -> str:
+    """Marker that lets a user enter/leave demo from INSIDE Mate (the setup screen's
+    "Try the demo" button and the in-demo exit banner) — no command line, no add-on
+    config. It lives next to the DB, i.e. on the persistent /data volume both as an HA
+    add-on and standalone, so it survives the restart. run.sh reads the SAME path at boot
+    to decide whether to start in demo (see run.sh)."""
+    db = os.environ.get("DB_PATH", "/data/leapmotor_mate.db")
+    return os.path.join(os.path.dirname(os.path.abspath(db)), "demo.flag")
+
+
+def set_flag(on: bool) -> None:
+    """Persist the in-app demo toggle. Takes effect on the NEXT container start — the
+    caller is responsible for restarting the container so run.sh re-reads it."""
+    p = flag_path()
+    if on:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w") as f:
+            f.write("1\n")
+    else:
+        try:
+            os.remove(p)
+        except FileNotFoundError:
+            pass
+
+
 # Synthetic wallbox readings so the Wallbox page renders fully in the demo (the real
 # session history still comes from the sample charges in the DB).
 _WB_LIVE = {"configured": True, "power_kw": 7.2, "energy_kwh": 9.6, "status": "Charging",

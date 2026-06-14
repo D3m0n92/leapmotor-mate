@@ -11,6 +11,12 @@ data/
 **/*.db-shm
 secret.key
 **/secret.key
+# App TLS certificate — user-provided at setup (README / markoceri/leapmotor-certs). NEVER
+# bundle it in the image, even when building locally from a working dir that has the files
+# (they're gitignored, so CI never sees them — this guards a local `docker build`). Keep .gitkeep.
+certs/app.crt
+certs/app.key
+certs/*.pem
 tests/
 docker-compose*.yml
 .dockerignore

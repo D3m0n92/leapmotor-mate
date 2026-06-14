@@ -24,6 +24,19 @@ if mkdir -p /data/tmp 2>/dev/null; then
   export TMPDIR=/data/tmp
 fi
 
+# ── Demo mode (MATE_DEMO=1): bundled sample data, no account/cloud, web only ──
+# Lets anyone explore Mate's pages with a realistic fake month before configuring
+# their car. Regenerates a fresh "last 30 days" sample DB on every start.
+if [ -n "${MATE_DEMO}" ] && [ "${MATE_DEMO}" != "0" ] && [ "${MATE_DEMO}" != "false" ]; then
+  export DB_PATH="/data/demo.db"
+  export MATE_DEMO=1
+  echo "[LeapMotor Mate] DEMO MODE — generating sample data at ${DB_PATH} (no account, no cloud)"
+  mkdir -p /data
+  PYTHONPATH=/app/poller python3 /app/poller/seed_demo.py || { echo "[LeapMotor Mate] demo seed failed"; exit 1; }
+  echo "[LeapMotor Mate] DEMO MODE — starting web only"
+  exec env PYTHONPATH=/app/web python3 /app/web/main.py
+fi
+
 echo "[LeapMotor Mate] Starting..."
 echo "[LeapMotor Mate] DB: ${DB_PATH}"
 echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"

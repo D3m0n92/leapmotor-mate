@@ -77,7 +77,8 @@
   </div>
 </div>
 
-<!-- Cloud insights: energy distribution + 6-week consumption trend -->
+{% if not demo %}
+<!-- Cloud insights: energy distribution + 6-week consumption trend (live cloud data; hidden in demo) -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
   <div class="card" hx-get="api/energy-breakdown" hx-trigger="load" hx-swap="innerHTML">
     <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
@@ -86,6 +87,7 @@
     <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
   </div>
 </div>
+{% endif %}
 
 <!-- Regen KPI row -->
 <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

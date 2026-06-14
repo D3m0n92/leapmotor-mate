@@ -23,9 +23,13 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.20.2"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.21.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
+import demo
+
+_IS_DEMO = demo.is_demo()
+demo.install(command_client, ha_client)   # no-op unless MATE_DEMO is set
 
 
 def _add_file_log() -> None:
@@ -171,7 +175,7 @@ def _ctx(**kwargs):
         if pos.get("charging"): return t("state_charging")
         if _driving(pos): return t("state_driving")
         return t("state_parked")
-    return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION,
+    return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION, "demo": _IS_DEMO,
             "update": update_check.get_update_status(MATE_VERSION),
             "wallbox_enabled": db_reader.get_setting("wallbox_enabled", "0") == "1",
             "currency": db_reader.get_currency(), "auth_enabled": auth.enabled(),
@@ -187,6 +191,8 @@ async def healthz():
     503 if the poller looks wedged/dead. The threshold is well past the 900s offline
     backoff so a deep-sleeping car never reads as unhealthy."""
     import time as _t
+    if _IS_DEMO:
+        return JSONResponse({"status": "demo"}, status_code=200)
     if not db_reader.is_setup_complete():
         return JSONResponse({"status": "awaiting_setup"}, status_code=200)
     try:
@@ -700,6 +706,9 @@ async def nav_chargers(radius: int = 2000, q: str = "", n: int = 25):
 
 @app.get("/api/vehicle-status", response_class=HTMLResponse)
 async def vehicle_status_api(request: Request):
+    if _IS_DEMO:
+        return templates.TemplateResponse(request, "partials/vehicle_status.html",
+                                          _ctx(vs=demo.vehicle_status(db_reader)))
     import asyncio
     signals = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals)
     vs = _parse_vehicle_status(signals) if signals else None
@@ -2273,6 +2282,16 @@ async def run_command(name: str, background_tasks: BackgroundTasks):
             fn = command_client.ac_off if name == "ac_on" else command_client.ac_on
         expected = {field: (not turning_off)}   # verify the tile actually flipped
         overrides = {}                          # never fake climate state in the DB
+
+    if _IS_DEMO:
+        # Demo mode: reflect the command in the demo's own state (reusing the
+        # optimistic overlay) and skip the cloud entirely — keeps the demo interactive.
+        if expected:
+            db_reader.write_optimistic_status(expected)
+        if name in _COMFORT_CMD_OPTIMISTIC:
+            _veh, _ = db_reader.get_vehicle()
+            _optimistic_comfort(_veh.get("vin") if _veh else None, _COMFORT_CMD_OPTIMISTIC[name])
+        return HTMLResponse('<span style="color:#22c55e">✓ Done</span>')
 
     import asyncio
     ok, msg = await asyncio.get_event_loop().run_in_executor(None, fn)

@@ -3,6 +3,19 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.21.0] — 2026-06-14
+
+### Added
+- **Demo mode — try Mate before configuring anything.** Run Mate with `MATE_DEMO=1`
+  (e.g. `docker run --rm -p 4000:4000 -e MATE_DEMO=1 ghcr.io/protossblaster/leapmotor-mate`) and it serves
+  a realistic, self‑contained **month of sample data** — weekday commutes, cheap overnight home AC charging,
+  a *weekend al mare* with an expensive **DC fast charge**, the blended (WAC) trip costs, battery health,
+  vampire drain and the monthly report — with **no Leapmotor account, car or cloud**. Remote commands are
+  **simulated** (lock, climate, windows… flip the demo's own state), so the whole UI is explorable and
+  interactive, and a **DEMO** badge is shown. **All data is purely demonstrative — nothing is real.**
+  Fully gated behind `MATE_DEMO`: a normal install is unaffected (the demo code is inert when the flag is
+  off — verified by the full test suite running in normal mode).
+
 ## [1.20.2] — 2026-06-14
 
 ### Fixed

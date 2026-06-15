@@ -4,7 +4,7 @@
 companion (think *TeslaMate* for Leapmotor). Runs as a **standalone Docker container** or as a
 **Home Assistant add-on**.
 
-Supported models: **B10 · C10 · T03** (European spec).
+Supported models: **B05 · B10 · C10 · T03** — full‑electric (BEV) only, European spec (the Leapmotor lineup distributed by Stellantis/Leapmotor). Not for REEV / range‑extender versions.
 
 ![Overview](https://raw.githubusercontent.com/ProtossBlaster/leapmotor-mate/main/docs/screenshots/overview.png)
 

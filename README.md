@@ -2,7 +2,7 @@
 
 **Trip tracking, charge logging and remote control for Leapmotor vehicles** — a self‑hosted companion (think *TeslaMate* for Leapmotor). Runs as a **Home Assistant add‑on** or as a **standalone Docker** container.
 
-Supported models: **B10 · C10 · T03** (European spec).
+Supported models: **B05 · B10 · C10 · T03** — full‑electric (BEV) only, European spec (the Leapmotor lineup distributed by Stellantis/Leapmotor). Not for REEV / range‑extender versions.
 
 > 🇮🇹 [Versione italiana più sotto.](#leapmotor-mate--italiano)
 
@@ -239,7 +239,7 @@ Publish the car to Home Assistant as **native entities** (in parallel to the Mat
 
 **Tracciamento viaggi, registro ricariche e controllo remoto per veicoli Leapmotor** — un companion self‑hosted (un *TeslaMate* per Leapmotor). Funziona come **add‑on di Home Assistant** o come **container Docker standalone**.
 
-Modelli supportati: **B10 · C10 · T03** (spec. europea).
+Modelli supportati: **B05 · B10 · C10 · T03** — solo full‑electric (BEV), spec. europea (gamma Leapmotor distribuita da Stellantis/Leapmotor). NON per le versioni REEV / range‑extender.
 
 ## ☕ Sostieni il progetto
 

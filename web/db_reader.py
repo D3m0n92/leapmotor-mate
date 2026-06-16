@@ -771,6 +771,20 @@ def get_latest_status() -> Optional[dict]:
     # Apply in-memory optimistic overrides if still within TTL
     if time.time() < _opt_expiry and _opt_overrides:
         d.update(_opt_overrides)
+    # GPS fallback: a poll can come back with no fix → (0,0). Don't let that blank the Overview
+    # map (or reset Navigation's start point) — fall back to the last position that had a real
+    # fix and flag it stale, so the last known location keeps showing. Only a true (0,0)/null is
+    # treated as "no fix" (a car genuinely on the prime meridian at lon 0 is kept).
+    _lat, _lon = d.get("latitude"), d.get("longitude")
+    if _lat is None or _lon is None or (abs(_lat) < 1e-6 and abs(_lon) < 1e-6):
+        last = db.execute(
+            "SELECT latitude, longitude FROM positions "
+            "WHERE latitude IS NOT NULL AND longitude IS NOT NULL "
+            "AND NOT (ABS(latitude) < 1e-6 AND ABS(longitude) < 1e-6) "
+            "ORDER BY id DESC LIMIT 1").fetchone()
+        if last:
+            d["latitude"], d["longitude"] = last["latitude"], last["longitude"]
+            d["position_stale"] = True
     # Charge power: positions stores current/voltage, not a power column. Compute it
     # (|I×V|), only when the charge current is meaningful (>=3A). Signal 49 is NOT a
     # power (it's the left-mirror-heating flag) and must never be used here.

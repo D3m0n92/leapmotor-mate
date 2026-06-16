@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.22.1] — 2026-06-16
+
+### Fixed
+- **The Overview map no longer disappears when the car reports no GPS fix.** Parked or in standby, the car can answer a poll with no position — coordinates come through as `0, 0` — and the Overview's "Last position" map was then hidden until the next valid fix. Mate now falls back to the **last known valid position**, so the map keeps showing where the car was last seen (this also gives the Navigation page a sensible starting point instead of a default).
+
 ## [1.22.0] — 2026-06-16
 
 ### Added

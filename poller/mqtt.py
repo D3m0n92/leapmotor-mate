@@ -223,10 +223,15 @@ class MqttService:
         # reports these even though the matching remote commands are broken). A confirmed-broken
         # one gets its retained config cleared so HA drops it.
         for key, name, feat, icon in [
-            ("seat_heat_driver",    "Seat Heating Left",         "seat_heat",     "mdi:car-seat-heater"),
-            ("seat_heat_passenger", "Seat Heating Right",        "seat_heat",     "mdi:car-seat-heater"),
-            ("seat_vent_driver",    "Seat Ventilation Left",     "seat_vent",     "mdi:car-seat-cooler"),
-            ("seat_vent_passenger", "Seat Ventilation Right",    "seat_vent",     "mdi:car-seat-cooler"),
+            # Seats are ROLE-based, NOT physical sides (unlike the doors below): the cloud signals are
+            # driver/co-driver (2100/2118) and the matching commands take position=driver|copilot — the
+            # car maps the role to the physical side by market, so "Driver/Passenger" is correct on LHD
+            # *and* RHD. Reverted from Left/Right (mate#61: on an RHD car "Right" lit the left seat in
+            # the app). Entity object_ids kept (no HA churn).
+            ("seat_heat_driver",    "Seat Heating Driver",       "seat_heat",     "mdi:car-seat-heater"),
+            ("seat_heat_passenger", "Seat Heating Passenger",    "seat_heat",     "mdi:car-seat-heater"),
+            ("seat_vent_driver",    "Seat Ventilation Driver",   "seat_vent",     "mdi:car-seat-cooler"),
+            ("seat_vent_passenger", "Seat Ventilation Passenger","seat_vent",     "mdi:car-seat-cooler"),
             ("steering_heat",       "Steering Wheel Heat",       "steering_heat", "mdi:steering"),
             ("mirror_heat_left",    "Mirror Heating Left",       "mirror_heat",   "mdi:car-side"),
             ("mirror_heat_right",   "Mirror Heating Right",      "mirror_heat",   "mdi:car-side"),
@@ -303,14 +308,14 @@ class MqttService:
             ("steering_heat_off", "Steering Heat Off", "mdi:steering"),
             ("mirror_heat_on", "Mirror Heat On", "mdi:mirror-rectangle"),
             ("mirror_heat_off", "Mirror Heat Off", "mdi:mirror-rectangle"),
-            ("seat_heat_driver_on", "Left Seat Heat On", "mdi:car-seat-heater"),
-            ("seat_heat_driver_off", "Left Seat Heat Off", "mdi:car-seat-heater"),
-            ("seat_heat_passenger_on", "Right Seat Heat On", "mdi:car-seat-heater"),
-            ("seat_heat_passenger_off", "Right Seat Heat Off", "mdi:car-seat-heater"),
-            ("seat_vent_driver_on", "Left Seat Vent On", "mdi:car-seat-cooler"),
-            ("seat_vent_driver_off", "Left Seat Vent Off", "mdi:car-seat-cooler"),
-            ("seat_vent_passenger_on", "Right Seat Vent On", "mdi:car-seat-cooler"),
-            ("seat_vent_passenger_off", "Right Seat Vent Off", "mdi:car-seat-cooler"),
+            ("seat_heat_driver_on", "Driver Seat Heat On", "mdi:car-seat-heater"),
+            ("seat_heat_driver_off", "Driver Seat Heat Off", "mdi:car-seat-heater"),
+            ("seat_heat_passenger_on", "Passenger Seat Heat On", "mdi:car-seat-heater"),
+            ("seat_heat_passenger_off", "Passenger Seat Heat Off", "mdi:car-seat-heater"),
+            ("seat_vent_driver_on", "Driver Seat Vent On", "mdi:car-seat-cooler"),
+            ("seat_vent_driver_off", "Driver Seat Vent Off", "mdi:car-seat-cooler"),
+            ("seat_vent_passenger_on", "Passenger Seat Vent On", "mdi:car-seat-cooler"),
+            ("seat_vent_passenger_off", "Passenger Seat Vent Off", "mdi:car-seat-cooler"),
         ]:
             # Model-aware: hide command buttons confirmed broken on THIS car (e.g. A/C Off on
             # the B10). Clearing the retained config makes HA drop a button that was published

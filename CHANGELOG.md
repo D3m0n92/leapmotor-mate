@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.21.7] — 2026-06-16
+
+### Fixed
+- **Front-seat heat/vent tiles are labelled "Driver / Passenger" again, not "Left / Right".** The per-seat comfort *command* is role-based — Mate sends `driver`/`co-driver` and the car maps the role to the physical side for its market — so the fixed "Left/Right" labels introduced in v1.14.0 were inverted on right-hand-drive (UK) cars: turning on "Right seat" actuated the seat the official app shows on the **left** ([#61](https://github.com/ProtossBlaster/leapmotor-mate/issues/61)). Restored the role labels across the Commands tiles, the one-touch Prepare-car screen and the MQTT entities (object_ids unchanged → no Home Assistant churn), so Mate now matches the official app on both LHD and RHD. **Doors, windows, tyres and mirrors are unaffected** — those are physical-position signals (e.g. doors come from the left/right body-control modules) and correctly stay Left/Right.
+
 ## [1.21.6] — 2026-06-15
 
 ### Added

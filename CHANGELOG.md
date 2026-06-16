@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.22.2] — 2026-06-16
+
+### Fixed
+- **Vampire-drain chart now captures standby loss that only becomes visible when the car wakes.** While a car is in deep sleep it stops reporting and the cloud serves a *frozen* battery %, so a slow standby loss stays invisible — and if you drove off right after waking, that drop fell in the gap between the last parked reading and the trip's start, and was never counted as standby drain (so the chart could look empty). Mate now closes the parked window at the fresh battery % from the wake-into-drive reading, attributing the loss correctly. Charging wake-ups are left out (the pre-charge gap is ambiguous), and the existing reliability flag still marks short/high-rate windows as estimates.
+
 ## [1.22.1] — 2026-06-16
 
 ### Fixed

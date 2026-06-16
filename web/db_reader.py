@@ -2151,14 +2151,24 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
     windows = []
     agg = {"drop": 0.0, "hours": 0.0}
 
-    def _flush(w, ongoing=False):
+    def _flush(w, ongoing=False, close=None):
         if not w:
             return
-        t0, t1 = _local_dt(w["t0"]), _local_dt(w["t_last"])
+        soc_end, t_end = w["soc_last"], w["t_last"]
+        # The park ended at a wake into driving/charging: the first fresh reading reveals the SoC
+        # that actually drained DURING deep sleep — while asleep the car stops reporting and the
+        # cloud serves a FROZEN SoC, so the parked samples sit flat and a slow loss is invisible
+        # until wake (and is otherwise lost if the car is driven right away: the parked window
+        # closes at the frozen value and the drop falls in the gap before the trip's start SoC).
+        # Close the window at that fresh value + time so the drain is captured — but only when it's
+        # a DROP (a rise = BMS recalibration / charge → keep the parked value, never invent drain).
+        if close is not None and close["soc"] is not None and close["soc"] < (soc_end or 0):
+            soc_end, t_end = close["soc"], close["recorded_at"]
+        t0, t1 = _local_dt(w["t0"]), _local_dt(t_end)
         if t0 is None or t1 is None:
             return
         hours = (t1 - t0).total_seconds() / 3600.0
-        drop = (w["soc0"] or 0) - (w["soc_last"] or 0)
+        drop = (w["soc0"] or 0) - (soc_end or 0)
         if hours >= min_hours:
             # Headline aggregate: every park long enough to measure counts, including zero-drop
             # ones — a "drain happened"-only sample reads high (selection bias). SoC up-ticks
@@ -2173,7 +2183,7 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
             windows.append({
                 "start": t0.isoformat(), "end": t1.isoformat(),
                 "hours": round(hours, 1),
-                "soc_start": round(w["soc0"], 1), "soc_end": round(w["soc_last"], 1),
+                "soc_start": round(w["soc0"], 1), "soc_end": round(soc_end, 1),
                 "drop_pct": drop_r,
                 "pct_per_day": round(drop / hours * 24, 1),
                 "rate_err": round(err, 1),
@@ -2192,7 +2202,12 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
             _flush(cur)
             cur = None
         if not idle:                        # driving / charging now → park ended
-            _flush(cur)
+            # Close at the wake's fresh SoC only on a DRIVING transition (the odometer-rise guard
+            # above already split off any drive that happened in a gap, so a same-odometer drive
+            # sample here is a genuine wake-after-park → its SoC is real standby drain). A CHARGING
+            # transition is left as-is: the pre-charge gap is ambiguous (could be a drive to the
+            # charger), so we never infer drain from it.
+            _flush(cur, close=(None if r["charging"] else r))
             cur = None
             continue
         if cur is None:                     # start a new parked window

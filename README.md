@@ -1,5 +1,15 @@
 # LeapMotor Mate
 
+[![CI](https://github.com/ProtossBlaster/leapmotor-mate/actions/workflows/ci.yml/badge.svg)](https://github.com/ProtossBlaster/leapmotor-mate/actions/workflows/ci.yml)
+[![Docker](https://github.com/ProtossBlaster/leapmotor-mate/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/ProtossBlaster/leapmotor-mate/actions/workflows/docker-publish.yml)
+[![Docker Hub](https://img.shields.io/docker/pulls/protossblaster/leapmotor-mate?label=docker%20pulls&logo=docker&logoColor=white)](https://hub.docker.com/r/protossblaster/leapmotor-mate)
+[![Release](https://img.shields.io/github/v/release/ProtossBlaster/leapmotor-mate)](https://github.com/ProtossBlaster/leapmotor-mate/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/ProtossBlaster/leapmotor-mate?style=social)](https://github.com/ProtossBlaster/leapmotor-mate/stargazers)
+![Python](https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5?logo=homeassistant&logoColor=white)
+
 **Trip tracking, charge logging and remote control for Leapmotor vehicles** — a self‑hosted companion (think *TeslaMate* for Leapmotor). Runs as a **Home Assistant add‑on** or as a **standalone Docker** container.
 
 Supported models: **B05 · B10 · C10 · T03** — full‑electric (BEV) only, European spec (the Leapmotor lineup distributed by Stellantis/Leapmotor). Not for REEV / range‑extender versions.
@@ -11,6 +21,7 @@ Supported models: **B05 · B10 · C10 · T03** — full‑electric (BEV) only, E
 LeapMotor Mate is free and open-source, developed in my spare time. If it's useful to you, you can support its development with a coffee — thank you! ☕
 
 <a href="https://www.buymeacoffee.com/protossblaster" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48"></a>
+<a href="https://www.paypal.me/ProtossBlaster" target="_blank"><img src="https://img.shields.io/badge/PayPal-Donate-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="PayPal" height="48"></a>
 
 ## Screenshots
 
@@ -246,6 +257,7 @@ Modelli supportati: **B05 · B10 · C10 · T03** — solo full‑electric (BEV),
 LeapMotor Mate è gratuito e open-source, sviluppato nel tempo libero. Se ti è utile, puoi sostenerne lo sviluppo con un caffè — grazie! ☕
 
 <a href="https://www.buymeacoffee.com/protossblaster" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48"></a>
+<a href="https://www.paypal.me/ProtossBlaster" target="_blank"><img src="https://img.shields.io/badge/PayPal-Donate-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="PayPal" height="48"></a>
 
 ## Schermate
 

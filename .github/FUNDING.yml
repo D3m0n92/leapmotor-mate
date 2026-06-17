@@ -1,2 +1,4 @@
 # Adds a "Sponsor" button to the repository.
 buy_me_a_coffee: protossblaster
+custom:
+  - https://www.paypal.me/ProtossBlaster

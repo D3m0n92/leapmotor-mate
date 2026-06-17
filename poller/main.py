@@ -139,6 +139,12 @@ def _handle_mqtt_command(client, service, db, vin: str, cmd: str, value):
 
     # Command succeeded → reflect it in HA now, then re-poll fast to confirm the real state.
     if optimistic and service:
+        # Keep the "A/C Off" guard's reference (last_climate_on) in sync with what we just set
+        # optimistically. It's otherwise only written by a POLL, so right after a Quick Cool/Heat
+        # (before the next poll) it still held the old "off" value and the following "A/C Off" was
+        # silently skipped as a no-op (#67). The next poll overwrites it with the real signal.
+        if optimistic[0] == "climate_on":
+            service.last_climate_on = optimistic[1]
         try:
             service.publish_state(vin, optimistic[0], optimistic[1])
         except Exception as exc:  # noqa: BLE001

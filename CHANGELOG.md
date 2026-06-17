@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.24.2] — 2026-06-18
+
+### Fixed
+- **Home Assistant: "A/C Off" over MQTT now actually turns the climate off after a Quick Cool/Heat ([#67](https://github.com/ProtossBlaster/leapmotor-mate/issues/67), thanks @Gr1m214).** The MQTT "A/C Off" button is guarded so that pressing it when the climate is already off is a harmless no-op. That guard read a reference (`last_climate_on`) that was only ever updated by a *poll* — the optimistic state published right after a command didn't update it. So immediately after a Quick Cool/Heat (before the next poll caught up) the reference still said "off", and the following "A/C Off" was **silently skipped**. The guard now stays in sync with the optimistic state, so "A/C Off" fires as expected. The web "A/C Off" button was never affected (it sends the command directly, without that guard). Verified end-to-end on a B10: Quick Cool → A/C on → A/C Off → A/C off. _Note: `ac_switch operate=off` is confirmed to fully switch the A/C off on the B10; on other models the cloud may accept but ignore it — a separate, model-level limit._
+
 ## [1.24.1] — 2026-06-17
 
 ### Fixed

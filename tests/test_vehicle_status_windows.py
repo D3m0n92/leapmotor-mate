@@ -36,8 +36,8 @@ def test_t03_open_windows_read_from_percent(monkeypatch):
 
 def test_b10_per_window_percent_from_commanded(monkeypatch):
     # B10: % sensor dead → the per-window % falls back to the last commanded position, but only for
-    # a window the flag confirms OPEN (a closed window shows no stale %).
-    sig = {"1693": 2, "1694": 0, "1695": 0, "1696": 0}   # only FL open
+    # a window the flag confirms OPEN (a closed window shows no stale %). Open = the canonical flag 1.
+    sig = {"1693": 1, "1694": 0, "1695": 0, "1696": 0}   # only FL open
     w = _windows(sig, "B10VIN", monkeypatch, pct_trusted=False, cmd_pct=50)
     assert (w["fl"], w["fl_pct"]) == (True, 50)
     assert (w["fr"], w["fr_pct"]) == (False, None)
@@ -45,8 +45,19 @@ def test_b10_per_window_percent_from_commanded(monkeypatch):
 
 def test_b10_no_percent_without_a_commanded_value(monkeypatch):
     # nothing commanded yet → open/closed only, no number.
-    w = _windows({"1693": 2}, "B10VIN", monkeypatch, pct_trusted=False, cmd_pct=None)
+    w = _windows({"1693": 1}, "B10VIN", monkeypatch, pct_trusted=False, cmd_pct=None)
     assert w["fl"] is True and w["fl_pct"] is None
+
+
+def test_b10_stale_flag_2_with_zero_percent_reads_closed(monkeypatch):
+    # #68 (riri19's B10): the status flag is 1693=2 on a *closed* window while the position % is 0.
+    # The vehicle-page chip must read CLOSED — a stale / non-binary flag must not show "open", and no
+    # phantom opening-% appears. (use_pct=True is the live default; the % present at 0 is authoritative.)
+    sig = {"1693": 2, "1694": 0, "1695": 0, "1696": 0,
+           "3727": 0, "3728": 0, "1879": 0, "1880": 0}
+    w = _windows(sig, "B10VIN", monkeypatch, pct_trusted=True, cmd_pct=50)
+    assert (w["fl"], w["fr"], w["rl"], w["rr"]) == (False, False, False, False)
+    assert (w["fl_pct"], w["fr_pct"], w["rl_pct"], w["rr_pct"]) == (0, 0, 0, 0)
 
 
 def test_t03_closed_windows(monkeypatch):

@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.24.1] — 2026-06-17
+
+### Fixed
+- **B10: windows no longer shown open when they are shut ([#68](https://github.com/ProtossBlaster/leapmotor-mate/issues/68), thanks @riri19).** Some B10 firmware reports the window status flag with a non-binary value (e.g. `2`) on a *fully closed* window, while the actual opening position reads 0%. Mate treated any non-zero flag as "open", so the Overview tile, the Commands grid and the new live car image all showed a window — and the "windows open" count — open when it wasn't, and a *close windows* command couldn't self-confirm (it timed out and reverted). Mate now trusts the opening position when the car reports it (0% = shut) and treats only the canonical flag value as open, so a closed window reads closed everywhere. The T03 (position-driven) and the genuinely-open cases are unchanged.
+
 ## [1.24.0] — 2026-06-17
 
 ### Added

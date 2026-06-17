@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.24.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.24.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -648,10 +648,11 @@ def _parse_vehicle_status(sig: dict, vin: str | None = None, cmd_pct: int | None
     win = capability_profile.window_open_states(sig, use_pct)
     def win_pct(state_k, pct_k):
         # Real sensor where trusted (T03); else fall back to the last commanded % — but only for a
-        # window the flag reports OPEN, so a closed window never shows a stale number.
+        # window the flag reports OPEN (canonical 1; a stale/non-binary value like 1693=2 is NOT
+        # open, see window_open_states / #68), so a closed window never shows a stale number.
         if use_pct:
             return i(pct_k)
-        return cmd_pct if (cmd_pct and (i(state_k) or 0) != 0) else None
+        return cmd_pct if (cmd_pct and i(state_k) == 1) else None
     return {
         # Wheel→signal mapping corrected from a TWO-B10 vs official-app cross-check (GitHub #32:
         # the UK reporter's car + Silvio's IT car, both showing 280 kPa at the rear-right):

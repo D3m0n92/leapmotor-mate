@@ -127,3 +127,35 @@ def test_poller_parse_signal_b10_flag_only_no_regression():
     assert data.windows_open is True
     assert [data.window_fl_open, data.window_fr_open,
             data.window_rl_open, data.window_rr_open] == [True, False, False, False]
+
+
+# ── #68 (riri19's B10): a stale / non-binary status flag must not raise a false "open" ────────────
+# Some B10 firmware reports the window status flag as 1693=2 on a *closed* window, while the paired
+# position % (3727) is 0. The owner closed the window with the NFC key and physically confirmed it
+# shut, yet Mate showed it open everywhere (Overview tile, Commands grid AND the new live car image).
+# The flag is not a clean boolean here, so the % (present, 0 = shut) must win and the flag only opens
+# on its canonical 1.
+STALE_FLAG2_CLOSED = {"1693": 2, "1694": 0, "1695": 0, "1696": 0,
+                      "3727": 0, "3728": 0, "1879": 0, "1880": 0}
+
+
+def test_b10_stale_flag_2_with_zero_percent_reads_closed():
+    states = cp.window_open_states(STALE_FLAG2_CLOSED, use_pct=True)
+    assert states == [False, False, False, False]
+    assert _open_and_count(states) == (0, 0)
+
+
+def test_poller_parse_signal_b10_stale_flag_2_no_false_open():
+    # Same frame through the poller — this is what paints the live Overview car image
+    # (window_fl_open / window_rl_open). A stale flag=2 must not draw the glass down.
+    data = client._parse_signal("B10VIN", dict(STALE_FLAG2_CLOSED))
+    assert data.windows_open is False
+    assert [data.window_fl_open, data.window_fr_open,
+            data.window_rl_open, data.window_rr_open] == [False, False, False, False]
+
+
+def test_web_save_fresh_signals_b10_stale_flag_2_stores_closed(tmp_path, monkeypatch):
+    # The Overview tile + "Finestrini aperti N" badge read these stored values; #68 must store (0, 0).
+    path = _web_db(tmp_path, monkeypatch)
+    db_reader.save_fresh_signals(dict(STALE_FLAG2_CLOSED))
+    assert _latest_windows(path) == (0, 0)

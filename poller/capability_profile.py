@@ -186,7 +186,12 @@ def window_open_states(signals: dict, use_pct: bool) -> list:
     for state_k, pct_k in _WINDOW_PAIRS:
         s = _i(state_k)
         p = _i(pct_k) if use_pct else None
-        states.append(None if (s is None and p is None) else bool((s or 0) != 0 or (p or 0) > 0))
+        # Open when the position % says so (the granular, model-agnostic truth: 0 % = shut) OR when
+        # the coarse status flag is a clean 1. We deliberately do NOT treat every non-zero flag as
+        # open: some B10 firmware reports 1693=2 on a *closed* window (GitHub #68 — the paired
+        # position % was 0 and the owner confirmed it shut). A stale / non-binary flag must not raise
+        # a false "open"; the % wins when present, and the flag only opens on its canonical 1.
+        states.append(None if (s is None and p is None) else bool((p or 0) > 0 or s == 1))
     return states
 
 

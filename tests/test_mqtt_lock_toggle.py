@@ -96,13 +96,13 @@ def _dispatch(value, tmp_path):
 def test_dispatch_lock(tmp_path):
     calls, pubs = _dispatch("LOCK", tmp_path)
     assert calls == [("lock", "VIN1")]
-    assert ("VIN1", "locked", True) in pubs          # optimistic flip → HA updates at once
+    assert pubs == []                                # no optimistic publish — HA shows only the real polled state
 
 
 def test_dispatch_unlock(tmp_path):
     calls, pubs = _dispatch("UNLOCK", tmp_path)
     assert calls == [("unlock", "VIN1")]
-    assert ("VIN1", "locked", False) in pubs
+    assert pubs == []
 
 
 def test_dispatch_ignores_garbage(tmp_path):
@@ -124,12 +124,12 @@ def test_discovery_publishes_a_toggle_switch():
 
 def test_dispatch_lock_toggle_on_locks(tmp_path):
     calls, pubs = _dispatch_cmd("lock_toggle", "ON", tmp_path)
-    assert calls == [("lock", "VIN1")] and ("VIN1", "locked", True) in pubs
+    assert calls == [("lock", "VIN1")] and pubs == []
 
 
 def test_dispatch_lock_toggle_off_unlocks(tmp_path):
     calls, pubs = _dispatch_cmd("lock_toggle", "OFF", tmp_path)
-    assert calls == [("unlock", "VIN1")] and ("VIN1", "locked", False) in pubs
+    assert calls == [("unlock", "VIN1")] and pubs == []
 
 
 # ── the redundant Lock/Unlock buttons are retired (superseded by lock + switch) ──

@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.25.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.25.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -40,11 +40,18 @@ def _add_file_log() -> None:
     (companion to the poller's). Best-effort; never blocks startup."""
     try:
         from logging.handlers import RotatingFileHandler
+        root = logging.getLogger()
+        # Idempotent. `uvicorn.run("main:app")` (at the bottom of this file) imports this module a SECOND
+        # time — as `main`, after it already ran as `__main__` — in the SAME process, so this module-level
+        # setup fires twice. Without this guard root would collect two handlers to the same file and EVERY
+        # web log line would be written twice (that was riri19's doubled diagnostics).
+        for h in root.handlers:
+            if isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "").endswith(diagnostics.WEB_LOG):
+                return
         fh = RotatingFileHandler(str(diagnostics.data_dir() / diagnostics.WEB_LOG),
                                  maxBytes=1_000_000, backupCount=2)
         fh.setFormatter(logging.Formatter(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
-        root = logging.getLogger()
         root.addHandler(fh)
         root.setLevel(logging.INFO)
     except Exception:  # noqa: BLE001
@@ -648,11 +655,11 @@ def _parse_vehicle_status(sig: dict, vin: str | None = None, cmd_pct: int | None
     win = capability_profile.window_open_states(sig, use_pct)
     def win_pct(state_k, pct_k):
         # Real sensor where trusted (T03); else fall back to the last commanded % — but only for a
-        # window the flag reports OPEN (canonical 1; a stale/non-binary value like 1693=2 is NOT
-        # open, see window_open_states / #68), so a closed window never shows a stale number.
+        # window the flag reports OPEN (any non-zero flag; the B10 reports 2 when open, see
+        # window_open_states), so a shut window (flag 0) never shows a stale number.
         if use_pct:
             return i(pct_k)
-        return cmd_pct if (cmd_pct and i(state_k) == 1) else None
+        return cmd_pct if (cmd_pct and (i(state_k) or 0) != 0) else None
     return {
         # Wheel→signal mapping corrected from a TWO-B10 vs official-app cross-check (GitHub #32:
         # the UK reporter's car + Silvio's IT car, both showing 280 kPa at the rear-right):
@@ -2492,10 +2499,20 @@ async def run_command(name: str, background_tasks: BackgroundTasks):
     remaining = _CMD_COOLDOWN_S - (time.time() - _last_command_at)
     if remaining > 0:
         wait = int(remaining) + 1
-        _wait_labels = {"it": "Attendi", "fr": "Patientez", "de": "Warten"}
-        label = _wait_labels.get(db_reader.get_language(), "Wait")
-        return HTMLResponse(f'<span style="color:#fbbf24">⏳ {label} {wait}s</span>')
+        # Say explicitly the command did NOT go through. A bare "Wait Ns" reads as "it's queued, it'll
+        # fire in Ns" — the opposite of what happened (the cooldown blocked it; the previous command may
+        # still be completing on the car). "Not sent — retry in Ns" makes the rejection unambiguous.
+        _cooldown_msg = {"it": "Non inviato — riprova tra {n}s",
+                         "fr": "Non envoyé — réessayez dans {n}s",
+                         "de": "Nicht gesendet — in {n}s erneut"}
+        msg = _cooldown_msg.get(db_reader.get_language(), "Not sent — retry in {n}s").format(n=wait)
+        # data-warn → the front-end leaves the notice up (and does NOT refresh the card, which would
+        # wipe it in a flash and make the user think the command was sent).
+        return HTMLResponse(f'<span data-warn="1" data-cooldown="1" style="color:#fbbf24">⏳ {msg}</span>')
     _last_command_at = time.time()
+    # Boost the poller so the car's REAL state is re-polled within a few seconds (not up to 30s).
+    # We no longer fake an optimistic state, so the UI must catch up to reality quickly.
+    db_reader.set_setting("boost_until", str(time.time() + 60))
     global _command_epoch
     _command_epoch += 1
     epoch = _command_epoch
@@ -2530,13 +2547,11 @@ async def run_command(name: str, background_tasks: BackgroundTasks):
     import asyncio
     ok, msg = await asyncio.get_event_loop().run_in_executor(None, fn)
     if ok:
-        if name in _COMFORT_CMD_OPTIMISTIC:
-            _veh, _ = db_reader.get_vehicle()
-            _optimistic_comfort(_veh.get("vin") if _veh else None, _COMFORT_CMD_OPTIMISTIC[name])
-        if overrides:
-            db_reader.write_optimistic_status(overrides)
-        if name in ("open_windows", "close_windows"):   # keep the slider in sync with the quick button
-            db_reader.set_setting("windows_cmd_pct", "20" if name == "open_windows" else "0")
+        # No optimistic overlay: the UI shows ONLY the real signal state, never a faked "done" before the
+        # car actually reports it (avoids "Mate says closed, the car is open"). The post-command verify
+        # loop + the boost above bring the real state in within a few seconds.
+        if name in ("open_windows", "close_windows"):   # keep the slider's last-commanded % (shown only
+            db_reader.set_setting("windows_cmd_pct", "20" if name == "open_windows" else "0")  # for a really-open window)
         # Climate commands take several seconds to reflect in signals → show the
         # spinner and refresh from real signals after a delay (like slow commands).
         slow = name in _SLOW_COMMANDS or field is not None

@@ -16,6 +16,14 @@
   #hero-card .hero-stream span:nth-child(3){animation-delay:.6s}
   #hero-card .hero-stream span:nth-child(4){animation-delay:.9s}
   @keyframes heroFlow{0%{left:-6px;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:64px;opacity:0}}
+  /* JS-driven persistent ⏳ on a movement command's button: shown from the press until the car actually
+     confirms the new state (the button toggles to its opposite) or a 30s timeout. Overrides the
+     htmx-indicator rule (which only covers the brief HTTP request) and keeps it centered. */
+  #hero-card .spin-on{display:flex!important;opacity:1!important}
+  /* While a command is in progress the buttons are inert — the click never reaches htmx, so no confirm
+     popup fires and the hidden cooldown can't be tripped. Dimmed so it reads as "wait". The ⏳ overlay is
+     a sibling (not a <button>), so it stays fully visible. */
+  #hero-cmds.cmds-busy button{pointer-events:none;opacity:.45}
 </style>
 <div class="mb-6">
   <h1 class="text-2xl font-bold text-white">{{ t('overview_title') }}</h1>
@@ -36,9 +44,17 @@
   <!-- Vehicle hero: image + live status overlaid + quick commands (+ charging animation).
        Auto-refreshes every 30s so the chips and toggle states stay current. Replaces the old
        plain picture card; content lives in partials/overview_hero.html. -->
-  <div class="card md:col-span-1 lg:col-span-1 flex flex-col min-h-64"
-       id="hero-card" hx-get="api/overview-hero" hx-trigger="every 30s" hx-swap="innerHTML">
-    {% include "partials/overview_hero.html" %}
+  <div class="card md:col-span-1 lg:col-span-1 flex flex-col min-h-64" id="hero-card">
+    {# Only #hero-body is swapped on refresh. The command-feedback line + readiness indicator below it
+       live OUTSIDE the swap, so a refresh never re-renders them — that flash of the server's default
+       green "ready" is exactly what used to flicker, and the swap is what detached the ⏳. They stay
+       visually inside the card, right under the buttons. #}
+    <div id="hero-body" class="flex-1 flex flex-col"
+         hx-get="api/overview-hero" hx-trigger="every 30s" hx-swap="innerHTML">
+      {% include "partials/overview_hero.html" %}
+    </div>
+    <div id="hero-cmd-result" class="text-center text-[11px] mt-2 min-h-[14px]"></div>
+    <div id="cmd-ready" class="text-center text-[10px] mt-0.5 text-emerald-400">{{ t('cmd_ready') }}</div>
   </div>
 
   <!-- Last charge -->
@@ -154,29 +170,111 @@
 </div>
 
 <script>
-// Quick-command feedback on the hero card. Its chips and button states only change when the card is
-// refetched, and it otherwise only auto-refreshes every 30s — so after a quick command the visible
-// state lagged up to 30s and you couldn't tell it had worked. Refresh the hero promptly after a
-// successful command: an instant flip from the optimistic overlay, then reconcile against the car as
-// the cloud catches up (mirrors the Commands page + the backend's 30s verify loop).
-function refreshHero() {
-  if (!document.getElementById('hero-card')) return;
-  htmx.ajax('GET', 'api/overview-hero', {target: '#hero-card', swap: 'innerHTML'});
+// Quick-command feedback on the hero card. We show ONLY the real state (no optimistic fake), so after a
+// command we re-poll the car — the backend boosts the poll — and refetch the hero as the real state lands
+// over the next few seconds. Never a "done" before the car actually reports it.
+
+// Command-readiness lives in these globals (NOT in the swappable card), so a refresh never loses it. The
+// indicator (#cmd-ready) is BINARY — no seconds countdown (Silvio: "evitiamo delay inutili"): RED "command
+// in progress (not yet completed)" while busy, GREEN "ready for a new command" once truly done.
+var sending = false, sendingSince = 0;
+var READY_MSG = {{ t('cmd_ready')|tojson }}, SENDING_MSG = {{ t('cmd_sending')|tojson }};
+
+// A command stays "busy" until BOTH:
+//   • the hidden 10 s floor has elapsed — it matches the backend's anti-spam cooldown, so the instant the
+//     pill turns green the NEXT command is GUARANTEED to be accepted (no green "ready" then a "Non inviato —
+//     riprova tra Ns" rejection — exactly the contradiction this fixes); AND
+//   • for a movement command, the car has REALLY confirmed the new state (its button toggled to the
+//     opposite). lock/unlock don't toggle → no confirm signal → the 10 s floor alone covers them.
+// While busy: the red message + the ⏳ on the pressed slot stay up, AND every command press is blocked
+// (preventDefault) so the user can never trip the cooldown — the wait is fully hidden. `slot` groups
+// open/close of one control under a stable key so the ⏳ survives the button toggling to its opposite.
+var CONFIRM = {open_trunk: 'close_trunk', close_trunk: 'open_trunk',
+               open_windows: 'close_windows', close_windows: 'open_windows'};
+var BUSY_MS = 10000;
+var busyUntil = 0, busyStart = 0, busySlot = null, pendingExpect = null;
+
+function slotOf(cmd) { return /trunk/.test(cmd) ? 'trunk' : /window/.test(cmd) ? 'windows' : cmd; }
+function isBusy()    { return Date.now() < busyUntil || pendingExpect != null; }
+function showSpin(slot, on) {                       // light/clear the ⏳ on a slot's CURRENT button
+  var el = slot && document.querySelector('#hero-body [data-slot="' + slot + '"] .hero-spin');
+  if (el) el.classList.toggle('spin-on', !!on);
 }
+
+function refreshHero() {
+  if (!document.getElementById('hero-body')) return;
+  // Never swap the body while the command's HTTP request is in flight: that detaches the pressed button,
+  // killing its htmx:afterRequest (a detached element can't bubble to the document listener). The
+  // post-command refresh batch re-runs once `sending` is false. (#cmd-ready lives outside #hero-body.)
+  if (sending) return;
+  htmx.ajax('GET', 'api/overview-hero', {target: '#hero-body', swap: 'innerHTML'});
+}
+
+function tick() {                                   // single owner of the pill + the ⏳ (every 300 ms + on swap)
+  if (sending && sendingSince && (Date.now() - sendingSince) > 60000) sending = false;   // watchdog
+  // Movement command confirmed: its opposite button is now in the DOM → the real signal flipped. (Safety:
+  // give up after 30 s if the car never confirms, so the ⏳ can't spin forever.)
+  if (pendingExpect && document.querySelector('#hero-body [hx-post="api/command/' + pendingExpect + '"]')) pendingExpect = null;
+  if (pendingExpect && (Date.now() - busyStart) > 30000) pendingExpect = null;
+  var busy = sending || isBusy();
+  showSpin(busySlot, busy);
+  var grid = document.getElementById('hero-cmds');   // make every command button inert while busy
+  if (grid) grid.classList.toggle('cmds-busy', busy);
+  if (!busy) busySlot = null;
+  var el = document.getElementById('cmd-ready');
+  if (el) {
+    el.textContent = busy ? SENDING_MSG : READY_MSG;
+    el.className = 'text-center text-[10px] mt-0.5 ' + (busy ? 'text-rose-400' : 'text-emerald-400');
+  }
+}
+setInterval(tick, 300);
+
+function keepNotice() {   // leave an error / driving-blocked notice up to be read, then clear it
+  setTimeout(function () { var n = document.getElementById('hero-cmd-result');
+                           if (n && n.querySelector('[data-warn]')) n.innerHTML = ''; }, 5000);
+}
+
+// Press a command → light the ⏳ on its slot + go red. While ALREADY busy (or a request is in flight),
+// BLOCK the press (preventDefault): the next command isn't available yet, so we never even send it — the
+// 10 s wait is hidden and the user can't trip the cooldown. (indexOf, so it also matches an ingress prefix.)
+document.addEventListener('htmx:beforeRequest', function(e) {
+  var path = (e.detail.pathInfo || {}).requestPath || '';
+  if (path.indexOf('api/command/') !== -1) {
+    if (sending || isBusy()) { e.preventDefault(); return; }   // a command is already in progress — block
+    sending = true; sendingSince = Date.now();
+    busySlot = slotOf((path.split('api/command/')[1] || '').replace(/\/$/, ''));
+    showSpin(busySlot, true);
+    tick(); return;
+  }
+  // Hold off the body's 30 s auto-refresh while a command is in flight (don't detach the in-flight button).
+  if (sending && path.indexOf('api/overview-hero') !== -1) e.preventDefault();
+});
+
 document.addEventListener('htmx:afterRequest', function(e) {
   var path = (e.detail.pathInfo || {}).requestPath || '';
-  if (!e.detail.successful || !path.startsWith('api/command/')) return;
+  if (path.indexOf('api/command/') === -1) return;
+  sending = false;                                   // the HTTP request finished (cloud accepted / refused)
+  var name = (path.split('api/command/')[1] || '').replace(/\/$/, '');
   var res = document.getElementById('hero-cmd-result');
-  if (res && res.querySelector('[data-warn]')) return;   // refused (e.g. while driving) — nothing changed
-  if (res && res.querySelector('[data-slow]')) {          // climate/slow: the car reflects it later
-    setTimeout(refreshHero, 12000);
-    setTimeout(refreshHero, 20000);
-  } else {
-    setTimeout(refreshHero, 800);     // instant flip from the optimistic overlay
-    setTimeout(refreshHero, 5000);    // reconcile as the cloud catches up
-    setTimeout(refreshHero, 15000);
+  if (e.detail.successful && res && !res.querySelector('[data-warn]')) {
+    res.innerHTML = '';                              // no "✓ Done": the pill + the ⏳ are the only feedback
+    // Start the hidden 10 s floor + (movement only) the real-confirm wait. The ⏳ + red stay until both end.
+    busySlot = slotOf(name); busyUntil = Date.now() + BUSY_MS; busyStart = Date.now();
+    pendingExpect = CONFIRM[name] || null;
+    // Re-poll the car (the backend boosts it) and refetch the body as the real state lands.
+    [1500, 4000, 8000, 14000, 22000, 31000].forEach(function (ms) { setTimeout(refreshHero, ms); });
+  } else if (res && res.querySelector('[data-warn]')) {
+    // Driving-blocked / car-timeout (a cooldown rejection can't reach here — those are blocked client-side):
+    // not in progress → drop the ⏳ and keep the notice up to be read.
+    showSpin(busySlot, false); busySlot = null;
+    keepNotice();
   }
-  setTimeout(refreshHero, 31000);     // final: real state after the verify loop's 30s deadline
+  tick();
+});
+
+// Re-apply the ⏳ + pill right after the body refetches (the swap recreated the buttons).
+document.addEventListener('htmx:afterSwap', function(e) {
+  if (e.detail.target && e.detail.target.id === 'hero-body') tick();
 });
 </script>
 {% endblock %}

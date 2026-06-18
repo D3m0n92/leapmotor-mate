@@ -190,12 +190,13 @@ def window_open_states(signals: dict, use_pct: bool) -> list:
     for state_k, pct_k in _WINDOW_PAIRS:
         s = _i(state_k)
         p = _i(pct_k) if use_pct else None
-        # Open when the position % says so (the granular, model-agnostic truth: 0 % = shut) OR when
-        # the coarse status flag is a clean 1. We deliberately do NOT treat every non-zero flag as
-        # open: some B10 firmware reports 1693=2 on a *closed* window (GitHub #68 — the paired
-        # position % was 0 and the owner confirmed it shut). A stale / non-binary flag must not raise
-        # a false "open"; the % wins when present, and the flag only opens on its canonical 1.
-        states.append(None if (s is None and p is None) else bool((p or 0) > 0 or s == 1))
+        # Open when the position % says so (0 % = shut) OR when the coarse status flag is non-zero.
+        # The B10 reports the flag as 2 when OPEN and 0 when shut (verified on-car against the official
+        # app: flag 2 = open). Its % sensor is dead (always 0), so the flag is the only truth there;
+        # the T03 is the opposite (flag dead at 0, the % is live). A stale cloud frame can momentarily
+        # serve an old value, but that's a connectivity artifact, not the flag's meaning. (Reverts the
+        # over-narrow `flag == 1` from #68, which mis-read a stale "2" frame as shut.)
+        states.append(None if (s is None and p is None) else bool((p or 0) > 0 or (s or 0) != 0))
     return states
 
 

@@ -144,18 +144,15 @@ def _handle_mqtt_command(client, service, db, vin: str, cmd: str, value):
         log.error("MQTT: command %s failed: %s", cmd, exc)
         return
 
-    # Command succeeded → reflect it in HA now, then re-poll fast to confirm the real state.
+    # Command succeeded → boost a fast re-poll so the car's REAL state reaches HA in a few seconds.
+    # We no longer optimistically publish the entity state — HA must never show a faked value that the
+    # car then contradicts ("Mate says closed, the car is open"). The boost below brings the truth.
     if optimistic and service:
-        # Keep the "A/C Off" guard's reference (last_climate_on) in sync with what we just set
-        # optimistically. It's otherwise only written by a POLL, so right after a Quick Cool/Heat
-        # (before the next poll) it still held the old "off" value and the following "A/C Off" was
-        # silently skipped as a no-op (#67). The next poll overwrites it with the real signal.
+        # Still keep the "A/C Off" guard's reference (last_climate_on) in sync with what we just sent —
+        # it's otherwise only written by a POLL, so right after a Quick Cool/Heat (before the next poll)
+        # it held the old "off" value and the following "A/C Off" was silently skipped (#67).
         if optimistic[0] == "climate_on":
             service.last_climate_on = optimistic[1]
-        try:
-            service.publish_state(vin, optimistic[0], optimistic[1])
-        except Exception as exc:  # noqa: BLE001
-            log.warning("MQTT: optimistic publish failed: %s", exc)
     try:
         # Write from a short-lived dedicated connection: this runs on paho's network
         # thread and the poller's shared db connection isn't safe to use cross-thread.

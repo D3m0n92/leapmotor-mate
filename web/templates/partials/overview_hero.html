@@ -17,14 +17,24 @@
    it's highlighted with `active_class` instead of the neutral slate look, so the icons mirror
    the live state at a glance. #}
 {% macro cmdbtn(cmd, icon, label, confirm='', color='text-slate-200', active=false, active_class='') %}
-<div class="flex flex-col items-center gap-1.5">
-  <button hx-post="api/command/{{ cmd }}" hx-target="#hero-cmd-result" hx-swap="innerHTML"
-          {% if confirm and not drv %}hx-confirm="{{ confirm }}"{% endif %}
-          onclick="document.getElementById('hero-cmd-result').innerHTML=''"
-          class="w-12 h-12 rounded-full active:scale-95 transition-all flex items-center justify-center
-                 {% if active %}{{ active_class }}{% else %}bg-slate-800 border border-slate-700 hover:border-brand/50 hover:bg-slate-700 {{ color }}{% endif %}">
-    {{ icon|safe }}
-  </button>
+{# `slot` groups the two states of a toggling control (open/close) under one stable key, so the page JS can
+   keep the ⏳ on the SAME button slot even after the body re-renders the opposite command. lock/unlock
+   don't toggle, so each is its own slot. #}
+{% set slot = 'trunk' if cmd in ('open_trunk', 'close_trunk') else 'windows' if cmd in ('open_windows', 'close_windows') else cmd %}
+<div class="flex flex-col items-center gap-1.5" data-slot="{{ slot }}">
+  <div class="relative">
+    <button hx-post="api/command/{{ cmd }}" hx-target="#hero-cmd-result" hx-swap="innerHTML"
+            hx-indicator="#hero-spin-{{ cmd }}"
+            {% if confirm and not drv %}hx-confirm="{{ confirm }}"{% endif %}
+            onclick="document.getElementById('hero-cmd-result').innerHTML=''"
+            class="w-12 h-12 rounded-full active:scale-95 transition-all flex items-center justify-center
+                   {% if active %}{{ active_class }}{% else %}bg-slate-800 border border-slate-700 hover:border-brand/50 hover:bg-slate-700 {{ color }}{% endif %}">
+      {{ icon|safe }}
+    </button>
+    {# Loading overlay ON the tapped button. Driven by the page JS (class `spin-on`) for the whole "busy"
+       window — the hidden 10 s floor + the real-confirm wait — not just the brief HTTP request. #}
+    <span id="hero-spin-{{ cmd }}" class="hero-spin htmx-indicator absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/75 text-brand text-lg pointer-events-none">⏳</span>
+  </div>
   <span class="text-[11px] {% if active %}text-slate-100 font-medium{% else %}text-slate-300{% endif %}">{{ label }}</span>
 </div>
 {% endmacro %}
@@ -116,7 +126,7 @@
     {{ ico.mdi('car', 'w-4 h-4') }} {{ t('vehicle_driving_locked') }}
   </div>
   {% endif %}
-  <div class="grid grid-cols-4 gap-2 mt-3">
+  <div id="hero-cmds" class="grid grid-cols-4 gap-2 mt-3">
     {# #66 — neutral at rest (no rainbow); the ACTIVE button is coloured by SAFETY meaning, never a
        single "OK-looking" accent: green = safe (locked), amber = attention (unlocked / windows open),
        red = alert (trunk open). Teal/brand stays for chrome + charts, so an open trunk never looks
@@ -141,7 +151,10 @@
       {{ cmdbtn('open_windows',  ico.mdi('car-side'), t('windows'), t('open_wins_confirm')) }}
     {% endif %}
   </div>
-  <div id="hero-cmd-result" class="text-center text-[11px] mt-2 min-h-[14px]"></div>
+  {# The command-feedback line (#hero-cmd-result) + readiness indicator (#cmd-ready) are NOT here: they
+     live in overview.html OUTSIDE this swapped partial, so a 30s/post-command refresh never re-renders
+     them (no false-green flicker) and never detaches the in-flight ⏳. The command buttons above still
+     target #hero-cmd-result by id — htmx resolves it across the partial boundary. #}
   {% endif %}
 
 </div>

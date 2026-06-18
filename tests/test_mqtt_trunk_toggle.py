@@ -95,18 +95,18 @@ def _dispatch(value, tmp_path):
 def test_dispatch_on_opens(tmp_path):
     calls, pubs = _dispatch("ON", tmp_path)
     assert calls == [("open_trunk", "VIN1")]
-    assert ("VIN1", "trunk_open", True) in pubs          # optimistic flip → HA updates at once
+    assert pubs == []                                    # no optimistic publish — HA shows only the real polled state
 
 
 def test_dispatch_off_closes(tmp_path):
     calls, pubs = _dispatch("OFF", tmp_path)
     assert calls == [("close_trunk", "VIN1")]
-    assert ("VIN1", "trunk_open", False) in pubs
+    assert pubs == []
 
 
 def test_dispatch_is_case_insensitive(tmp_path):
     calls, pubs = _dispatch("on", tmp_path)
-    assert calls == [("open_trunk", "VIN1")] and ("VIN1", "trunk_open", True) in pubs
+    assert calls == [("open_trunk", "VIN1")] and pubs == []
 
 
 def test_dispatch_ignores_garbage(tmp_path):

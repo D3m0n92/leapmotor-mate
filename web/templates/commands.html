@@ -2,6 +2,11 @@
 {% block title %}Commands — LeapMotor Mate{% endblock %}
 
 {% block content %}
+<style>
+  /* While a command is completing the whole grid is inert — the click never reaches htmx, so no confirm
+     popup fires and the hidden 10s cooldown can't be tripped. Dimmed so it reads as "wait". */
+  #cmd-grid.cmds-busy button, #cmd-grid.cmds-busy input { pointer-events: none; opacity: .45; }
+</style>
 <div class="mb-6">
   <h1 class="text-2xl font-bold text-white">{{ t('commands_title') }}</h1>
   <p class="text-slate-400 text-sm mt-1">{{ t('commands_subtitle') }}</p>
@@ -18,54 +23,115 @@ function refreshCmdGrid() {
   htmx.ajax('GET', 'api/cmd-grid', {source: '#cmd-refresh-src', target: '#cmd-grid', swap: 'outerHTML'});
 }
 
-// Window slider: snaps to the stops the car actually actuates (the B10 ignores the rest, #62).
-// The slider index maps to a %; onchange posts that %, which the backend maps to the native value.
+// === Command feedback — the SAME mechanism as the Overview hero, but the ⏳ AND the "in progress" message
+// live TOGETHER inside the launching control's OWN tile — they're ONE element (its #spin-), so they can
+// never desync (the ⏳ vanishing before the text). On a command: that tile shows "⏳ Comando in corso…" and
+// the WHOLE grid is disabled, for at least a hidden 10 s floor (= the backend's anti-spam cooldown, so the
+// next command is GUARANTEED accepted — never "ready" then "Non inviato — riprova tra Ns") AND, for a
+// toggling control (lock/trunk/windows/sunshade), until the car has REALLY confirmed (its opposite command's
+// button appears after a grid refetch). Then it clears and the grid re-enables. #result- is left untouched —
+// it carries the command's own response / driving notice (so the data-warn check below still works).
+var SENDING_MSG = {{ t('cmd_sending')|tojson }};
+var BUSY_TILE_MSG = '⏳ ' + SENDING_MSG.split('(')[0].trim();   // short head — fits the small tile
+var CONFIRM = {lock: 'unlock', unlock: 'lock', open_trunk: 'close_trunk', close_trunk: 'open_trunk',
+               open_windows: 'close_windows', close_windows: 'open_windows',
+               open_sunshade: 'close_sunshade', close_sunshade: 'open_sunshade'};
+var BUSY_MS = 10000;
+var sending = false, sendingSince = 0, busyUntil = 0, busyStart = 0, busyCmd = null, pendingExpect = null;
+function isBusy() { return Date.now() < busyUntil || pendingExpect != null; }
+// The ⏳ and the message are the SAME node (#spin-): turn it into the red message ON, restore the bare htmx ⏳ OFF.
+// Comfort toggles (steering / mirror heat) key their tile on `skey`, not the command — and the two mirrors
+// SHARE one command (mirror_heat_on heats both). So map the command to the skey(s) whose #spin- to drive,
+// falling back to #spin-{cmd} for every normal tile.
+var COMFORT_SKEYS = {
+  steering_heat_on: ['steering_heat'], steering_heat_off: ['steering_heat'],
+  mirror_heat_on: ['mirror_heat_left', 'mirror_heat_right'], mirror_heat_off: ['mirror_heat_left', 'mirror_heat_right']
+};
+function setBusyUI(cmd, on) {
+  var ids = COMFORT_SKEYS[cmd] ? COMFORT_SKEYS[cmd].map(function (s) { return 'spin-' + s; }) : ['spin-' + cmd];
+  ids.forEach(function (id) {
+    var sp = document.getElementById(id);
+    if (!sp) return;
+    if (on) { sp.textContent = BUSY_TILE_MSG; sp.className = 'text-rose-400 text-[11px] leading-tight'; sp.style.display = 'inline'; }
+    else    { sp.textContent = '⏳'; sp.className = 'htmx-indicator text-brand text-xs'; sp.style.display = ''; }
+  });
+}
+function cmdBusyTick() {
+  if (sending && sendingSince && (Date.now() - sendingSince) > 60000) sending = false;   // watchdog
+  if (pendingExpect && document.querySelector('#cmd-grid [hx-post="api/command/' + pendingExpect + '"]')) pendingExpect = null;
+  if (pendingExpect && (Date.now() - busyStart) > 30000) pendingExpect = null;            // safety
+  var busy = sending || isBusy();
+  var grid = document.getElementById('cmd-grid');
+  if (grid) grid.classList.toggle('cmds-busy', busy);
+  if (busy) setBusyUI(busyCmd, true);
+  else { setBusyUI(busyCmd, false); busyCmd = null; }
+}
+setInterval(cmdBusyTick, 300);
+
+// Keep the grid LIVE while you test. The grid only refetches after a command, and base.html's full-page
+// auto-reload fires ONLY after 20 s with NO interaction — so while you're actively pressing/scrolling it
+// never refreshes and the grid can sit on a stale state (e.g. windows that have since closed). Poll the
+// grid every 30 s like the Overview cards do — skipped while a command is completing (its own refetches
+// cover that window and a swap mid-command would disrupt the ⏳/disabled state), and skipped while a
+// slider/field is focused so it can't yank a control out from under you.
+setInterval(function () {
+  if (sending || isBusy()) return;
+  var ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
+  refreshCmdGrid();
+}, 30000);
+
+document.addEventListener('htmx:beforeRequest', function(e) {
+  var path = (e.detail.pathInfo || {}).requestPath || '';
+  if (path.indexOf('api/command/') !== -1) {
+    if (sending || isBusy()) { e.preventDefault(); return; }   // a command is already in progress — block (no popup)
+    sending = true; sendingSince = Date.now();
+    busyCmd = (path.split('api/command/')[1] || '').replace(/\/$/, '');
+    cmdBusyTick(); return;
+  }
+});
+
+document.addEventListener('htmx:afterRequest', function(e) {
+  var path = (e.detail.pathInfo || {}).requestPath || '';
+  var isCmd = path.indexOf('api/command/') !== -1;
+  // Sliders that change real state but aren't api/command — the windows % and the seat heat/vent levels.
+  // They don't trip the busy mechanism (no 10s wait), but they DO need the grid to refetch so the tile's
+  // badge/level reflects the change. api/seat was the missing one → the seat slider looked stale (badge
+  // not updating) exactly like the windows did.
+  var isSlider = path === 'api/windows' || path.indexOf('api/seat/') !== -1;
+  if (!isCmd && !isSlider) return;
+  if (isCmd) {
+    sending = false;
+    var name = (path.split('api/command/')[1] || '').replace(/\/$/, '');
+    var el = document.getElementById('result-' + name);
+    if (e.detail.successful && (!el || !el.querySelector('[data-warn]'))) {
+      if (el) el.innerHTML = '';                              // drop the "✓ Done" — the in-tile ⏳+message is the feedback
+      busyCmd = name; busyUntil = Date.now() + BUSY_MS; busyStart = Date.now();
+      pendingExpect = CONFIRM[name] || null;                  // movement toggle → wait for the real flip too
+    } else if (el && el.querySelector('[data-warn]')) {
+      setBusyUI(busyCmd, false); busyCmd = null;              // refused (e.g. driving) → drop the ⏳, keep the notice
+      setTimeout(function () { var n = document.getElementById('result-' + name); if (n) n.innerHTML = ''; }, 6000);
+      cmdBusyTick(); return;                                  // nothing changed on the car → no grid refetch
+    }
+    cmdBusyTick();
+  }
+  // Refetch the grid so the real state — and the toggled button that ends the wait — lands.
+  if (e.detail.successful) [1500, 5000, 9000, 15000, 23000, 31000].forEach(function (ms) { setTimeout(refreshCmdGrid, ms); });
+});
+
+// Re-apply the ⏳+message + disabled state right after a grid refetch (the swap rebuilt every tile).
+document.addEventListener('htmx:afterSwap', function() { cmdBusyTick(); });
+
+// === Window slider — snaps to the stops the car actually actuates (#62). Blocked while a command runs. ===
 var WINS_STOPS = {{ wins_stops | tojson }};
 var WINS_CONFIRM = {{ t('open_wins_confirm') | tojson }};
 function winsLbl(i) { var el = document.getElementById('wins-pct'); if (el) el.textContent = WINS_STOPS[i] + '%'; }
 function winsSet(i, el) {
-  // Opening confirms like the button does; cancelling reverts the slider to its last committed
-  // position (defaultValue = the server-rendered value attribute). Closing (0%) needs no prompt.
+  if (sending || isBusy()) { el.value = el.defaultValue; winsLbl(el.value); return; }   // a command is completing
+  // Opening confirms like the button does; cancelling reverts the slider to its last committed position.
   if (WINS_STOPS[i] > 0 && !confirm(WINS_CONFIRM)) { el.value = el.defaultValue; winsLbl(el.value); return; }
-  // Pass the slider as `source` so htmx puts the request class on IT, not on <body> — otherwise
-  // every command's ⏳ indicator (.htmx-request .htmx-indicator) would light up at once.
   var r = document.getElementById('wins-res'); if (r) r.textContent = '⏳';
   htmx.ajax('POST', 'api/windows', {source: el, values: {pct: WINS_STOPS[i]}, target: '#wins-res', swap: 'innerHTML'});
 }
-
-document.addEventListener('htmx:afterRequest', function(e) {
-  var path = (e.detail.pathInfo || {}).requestPath || '';
-  // Window slider (api/windows) is a real command too → refresh the grid quickly afterwards,
-  // instead of waiting for the next manual/command-triggered refresh.
-  if (!e.detail.successful || !(path.startsWith('api/command/') || path === 'api/windows')) return;
-  var resultId = 'result-' + path.split('/').pop();
-  var el = document.getElementById(resultId);
-  if (el && el.querySelector('[data-warn]')) {
-    // The command was refused before sending (e.g. sunshade while driving). Nothing
-    // changed on the car, so don't refetch the grid — that would wipe the notice.
-    // Leave it up to be read, then clear it.
-    setTimeout(function () { var n = document.getElementById(resultId); if (n) n.innerHTML = ''; }, 6000);
-    return;
-  }
-  var slow = el && el.querySelector('[data-slow]');
-  if (slow) {
-    // Climate/slow commands show a spinner and have no optimistic overlay — leave it
-    // up; the first refetch lands once the car has had time to reflect the change.
-    setTimeout(refreshCmdGrid, 12000);
-    setTimeout(refreshCmdGrid, 20000);
-  } else {
-    setTimeout(function() {
-      var el = document.getElementById(resultId);
-      if (el && el.innerHTML.includes('✓')) el.innerHTML = '';
-    }, 4000);
-    // Instant flip from the optimistic overlay (written before this response), then
-    // reconcile against the car as the cloud catches up (matches the backend verify
-    // loop's 30s deadline) — GitHub #34.
-    setTimeout(refreshCmdGrid, 800);
-    setTimeout(refreshCmdGrid, 5000);
-    setTimeout(refreshCmdGrid, 15000);
-  }
-  setTimeout(refreshCmdGrid, 31000);
-});
 </script>
 {% endblock %}

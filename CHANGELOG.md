@@ -3,6 +3,15 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.25.1] — 2026-06-18
+
+### Changed
+- **Command feedback now shows only the car's REAL state — clearer and consistent across the Overview and the Commands page.** Pressing a control no longer optimistically guesses the outcome: the tile you pressed shows a **"⏳ command in progress"** message until the car actually confirms the new state, every control is briefly disabled while a command completes so you can't fire a second one before the first is accepted (no more "not sent — retry in Ns" surprises), and the Commands grid now refreshes **live** so what you see always tracks the car. The same mechanism covers the Overview hero quick-commands and the whole Commands grid — vehicle (lock / trunk / windows / sunshade), climate, comfort toggles (steering & mirror heat) and the seat-level sliders — in EN/IT/FR/DE.
+
+### Fixed
+- **B10: a non-binary window status flag (e.g. `2`) is read as OPEN.** Confirmed live against the official app on a B10 — `2` is a genuinely open window. This reverts the 1.24.1 reading (which treated `2` as closed, from what turned out to be a stale cloud frame); transient/stale frames are now handled by the real-state polling above rather than by re-interpreting the flag.
+- **Web log lines — and the Diagnostics bundle — are no longer doubled.** `uvicorn.run("main:app")` re-imports the app module a second time in the same process, so the rotating-file-log setup ran twice and attached two handlers to the same file: every web line was written twice, doubling both the log and the diagnostics export. The setup is now idempotent (the handler is added once); the poller was never affected. (Spotted in @riri19's diagnostics export.)
+
 ## [1.25.0] — 2026-06-18
 
 ### Added

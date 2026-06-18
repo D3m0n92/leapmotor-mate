@@ -36,7 +36,7 @@ def test_t03_open_windows_read_from_percent(monkeypatch):
 
 def test_b10_per_window_percent_from_commanded(monkeypatch):
     # B10: % sensor dead → the per-window % falls back to the last commanded position, but only for
-    # a window the flag confirms OPEN (a closed window shows no stale %). Open = the canonical flag 1.
+    # a window the flag confirms OPEN (a closed window shows no stale %). Open = any non-zero flag.
     sig = {"1693": 1, "1694": 0, "1695": 0, "1696": 0}   # only FL open
     w = _windows(sig, "B10VIN", monkeypatch, pct_trusted=False, cmd_pct=50)
     assert (w["fl"], w["fl_pct"]) == (True, 50)
@@ -49,15 +49,15 @@ def test_b10_no_percent_without_a_commanded_value(monkeypatch):
     assert w["fl"] is True and w["fl_pct"] is None
 
 
-def test_b10_stale_flag_2_with_zero_percent_reads_closed(monkeypatch):
-    # #68 (riri19's B10): the status flag is 1693=2 on a *closed* window while the position % is 0.
-    # The vehicle-page chip must read CLOSED — a stale / non-binary flag must not show "open", and no
-    # phantom opening-% appears. (use_pct=True is the live default; the % present at 0 is authoritative.)
-    sig = {"1693": 2, "1694": 0, "1695": 0, "1696": 0,
-           "3727": 0, "3728": 0, "1879": 0, "1880": 0}
-    w = _windows(sig, "B10VIN", monkeypatch, pct_trusted=True, cmd_pct=50)
-    assert (w["fl"], w["fr"], w["rl"], w["rr"]) == (False, False, False, False)
-    assert (w["fl_pct"], w["fr_pct"], w["rl_pct"], w["rr_pct"]) == (0, 0, 0, 0)
+def test_b10_flag_2_reads_open(monkeypatch):
+    # B10 ground truth (verified on-car against the official app): the status flag is 1693=2 when the
+    # window is OPEN (0 = shut). The B10's position % sensor is dead (always 0 → untrusted, use_pct=False),
+    # so the flag is the only truth there → a flag of 2 must read OPEN, and the open window shows the
+    # last commanded %. (Reverts the #68 assumption that 2 = closed, which came from a stale cloud frame.)
+    sig = {"1693": 2, "1694": 0, "1695": 0, "1696": 0}   # only FL open (flag 2)
+    w = _windows(sig, "B10VIN", monkeypatch, pct_trusted=False, cmd_pct=50)
+    assert (w["fl"], w["fr"], w["rl"], w["rr"]) == (True, False, False, False)
+    assert (w["fl_pct"], w["fr_pct"]) == (50, None)
 
 
 def test_t03_closed_windows(monkeypatch):

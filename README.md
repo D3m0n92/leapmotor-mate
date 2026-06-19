@@ -124,6 +124,7 @@ The database is stored in the add‑on's persistent `/data`, so it survives rest
 
 ```bash
 docker run -d --name leapmotor-mate \
+  --restart unless-stopped \
   -p 4000:4000 \
   -v "$(pwd)/data:/data" \
   ghcr.io/protossblaster/leapmotor-mate:latest
@@ -353,6 +354,7 @@ Il database è salvato nella `/data` persistente dell'add‑on, quindi sopravviv
 
 ```bash
 docker run -d --name leapmotor-mate \
+  --restart unless-stopped \
   -p 4000:4000 \
   -v "$(pwd)/data:/data" \
   ghcr.io/protossblaster/leapmotor-mate:latest

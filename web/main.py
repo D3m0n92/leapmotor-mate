@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.25.1"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.25.2"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -2605,11 +2605,12 @@ async def setup_page(request: Request):
 
 
 def _restart_container() -> None:
-    """Exit the process so run.sh stops the container and HA/Docker recreate it — the same
-    mechanism the poller uses on an account switch (poller/main.py). On the next boot run.sh
-    re-reads the demo flag and starts in the right mode. Delayed briefly so the HTTP response
-    is flushed to the browser first."""
-    threading.Timer(1.2, lambda: os._exit(0)).start()
+    """Ask run.sh to relaunch Mate by exiting with the agreed RELAUNCH code (42). run.sh
+    re-exec's itself in-process (re-reading the demo flag), so this works even with NO
+    container restart policy — standalone `docker run` / Docker Desktop "Run" don't set one
+    (with a policy / HA add-on it still relaunches cleanly). The poller uses the same code on
+    an account switch (poller/main.py). Delayed briefly so the HTTP response reaches the browser."""
+    threading.Timer(1.2, lambda: os._exit(42)).start()
 
 
 @app.post("/api/demo/enable")

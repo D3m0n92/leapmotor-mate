@@ -14,6 +14,17 @@ fi
 export DB_PATH="${DB_PATH:-/data/leapmotor_mate.db}"
 export CERT_DIR="/app/certs"
 
+# Make sure the data directory exists BEFORE anything opens the DB. A standalone
+# user (especially via Docker Desktop "Run", which mounts no volume by default)
+# would otherwise hit "sqlite3: unable to open database file" and the poller would
+# crash on boot. Previously /data was created only as a SIDE EFFECT of the TMPDIR
+# mkdir below — now it's explicit. Pair with VOLUME /data in the Dockerfile so the
+# data even persists when no -v is given.
+if ! mkdir -p "$(dirname "${DB_PATH}")" 2>/dev/null; then
+  echo "[LeapMotor Mate] FATAL: cannot create data dir $(dirname "${DB_PATH}") — mount a writable volume at /data"
+  exit 1
+fi
+
 # Keep the temporary files the Leapmotor API writes — the per-login account TLS cert + key
 # (tempfile.mkstemp, suffix -leapmotor-cert.pem / -leapmotor-key.pem) — on the PERSISTENT /data
 # volume instead of the container's ephemeral /tmp. A standalone Docker (e.g. on a NAS) wipes
@@ -24,45 +35,65 @@ if mkdir -p /data/tmp 2>/dev/null; then
   export TMPDIR=/data/tmp
 fi
 
-# In-app demo toggle: the "Try the demo" button on Mate's setup screen (and the in-demo
-# exit banner) write/remove a flag file on the persistent volume, next to the DB. This lets
-# a user enter/leave demo from INSIDE Mate — no command line, no add-on configuration —
-# which the add-on configuration tab can't offer discoverably. Either this flag OR an
-# explicit MATE_DEMO=1 (standalone) turns demo on.
-if [ -z "${MATE_DEMO}" ] && [ -f "$(dirname "${DB_PATH}")/demo.flag" ]; then
-  export MATE_DEMO=1
-fi
+# ── Supervise / relaunch ─────────────────────────────────────────────────────
+# Mate's in-app toggles relaunch the app by exiting with code 42:
+#   • "Try the demo" / "Exit demo"   (web/main.py: _restart_container)
+#   • Leapmotor account switch        (poller/main.py: re-authenticate)
+# We handle that relaunch HERE by re-exec'ing this script, so it works even with
+# NO container restart policy — the default for `docker run` and Docker Desktop
+# "Run". (Without this, the toggle just stops the container and looks "crashed".)
+# Any OTHER exit code = a real stop/crash → propagate it and let the orchestrator
+# (HA add-on / Docker restart policy) decide.
+RELAUNCH_CODE=42
 
-# ── Demo mode (MATE_DEMO=1): bundled sample data, no account/cloud, web only ──
-# Lets anyone explore Mate's pages with a realistic fake month before configuring
-# their car. Regenerates a fresh "last 30 days" sample DB on every start.
+# The in-app demo flag lives next to the DB on the persistent volume; the "Try the
+# demo" button (and the in-demo exit banner) write/remove it. Re-read it on every
+# (re-)launch — so an "Exit demo" relaunch correctly drops back to normal mode.
+# MATE_DEMO / the demo DB path are passed only to the CHILDREN (not exported into
+# this shell), so re-exec re-derives the mode cleanly from the flag. An explicit
+# MATE_DEMO=1 (standalone) forces demo regardless of the flag.
+DEMO_ACTIVE=""
 if [ -n "${MATE_DEMO}" ] && [ "${MATE_DEMO}" != "0" ] && [ "${MATE_DEMO}" != "false" ]; then
-  export DB_PATH="/data/demo.db"
-  export MATE_DEMO=1
-  echo "[LeapMotor Mate] DEMO MODE — generating sample data at ${DB_PATH} (no account, no cloud)"
-  mkdir -p /data
-  PYTHONPATH=/app/poller python3 /app/poller/seed_demo.py || { echo "[LeapMotor Mate] demo seed failed"; exit 1; }
-  echo "[LeapMotor Mate] DEMO MODE — starting web only"
-  exec env PYTHONPATH=/app/web python3 /app/web/main.py
+  DEMO_ACTIVE=1
+elif [ -f "$(dirname "${DB_PATH}")/demo.flag" ]; then
+  DEMO_ACTIVE=1
 fi
 
-echo "[LeapMotor Mate] Starting..."
-echo "[LeapMotor Mate] DB: ${DB_PATH}"
-echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"
+if [ -n "${DEMO_ACTIVE}" ]; then
+  # Demo mode: bundled sample data, no account/cloud, web only.
+  echo "[LeapMotor Mate] DEMO MODE — generating sample data at /data/demo.db (no account, no cloud)"
+  if ! PYTHONPATH=/app/poller MATE_DEMO=1 DB_PATH=/data/demo.db python3 /app/poller/seed_demo.py; then
+    echo "[LeapMotor Mate] demo seed failed"; exit 1
+  fi
+  echo "[LeapMotor Mate] DEMO MODE — starting web only"
+  PYTHONPATH=/app/web MATE_DEMO=1 DB_PATH=/data/demo.db python3 /app/web/main.py &
+  WEB_PID=$!
+  PIDS="${WEB_PID}"
+else
+  echo "[LeapMotor Mate] Starting..."
+  echo "[LeapMotor Mate] DB: ${DB_PATH}"
+  echo "[LeapMotor Mate] Home Assistant API: $([ -n "${SUPERVISOR_TOKEN}" ] && echo "available (add-on mode)" || echo "not available (standalone)")"
+  PYTHONPATH=/app/poller python3 /app/poller/main.py &
+  POLLER_PID=$!
+  echo "[LeapMotor Mate] Poller PID: ${POLLER_PID}"
+  PYTHONPATH=/app/web python3 /app/web/main.py &
+  WEB_PID=$!
+  echo "[LeapMotor Mate] Web PID: ${WEB_PID}"
+  PIDS="${POLLER_PID} ${WEB_PID}"
+fi
 
-# Start poller in background
-PYTHONPATH=/app/poller python3 /app/poller/main.py &
-POLLER_PID=$!
-echo "[LeapMotor Mate] Poller PID: ${POLLER_PID}"
-
-# Start web server in background
-PYTHONPATH=/app/web python3 /app/web/main.py &
-WEB_PID=$!
-echo "[LeapMotor Mate] Web PID: ${WEB_PID}"
-
-# If either service exits, stop the container (HA or Docker will restart it)
-wait -n "$POLLER_PID" "$WEB_PID"
+# Wait for the first service to exit, then stop its sibling(s) and reap them.
+set +e
+wait -n ${PIDS}
 EXIT_CODE=$?
+kill ${PIDS} 2>/dev/null
+wait ${PIDS} 2>/dev/null
+set -e
+
+if [ "${EXIT_CODE}" = "${RELAUNCH_CODE}" ]; then
+  echo "[LeapMotor Mate] Relaunch requested (demo/account toggle) — restarting in-process"
+  exec "$0"
+fi
+
 echo "[LeapMotor Mate] A service exited (code ${EXIT_CODE}) — stopping"
-kill "$POLLER_PID" "$WEB_PID" 2>/dev/null
-exit "$EXIT_CODE"
+exit "${EXIT_CODE}"

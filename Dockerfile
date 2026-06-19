@@ -28,6 +28,16 @@ ENV PYTHONUNBUFFERED=1
 ENV CERT_DIR=/app/certs
 ENV DB_PATH=/data/leapmotor_mate.db
 
+# Declare the web port so Docker Desktop's "Run" pre-fills the port mapping. Without
+# this the Run dialog shows "No ports exposed in this image" and the user can't reach
+# the UI (a frequent first-run dead end).
+EXPOSE 4000
+
+# Persist the data dir even when the user forgets `-v ...:/data`: Docker creates an
+# anonymous volume, so trips/charges/login survive a container recreate instead of
+# living in the throwaway container layer.
+VOLUME /data
+
 # Liveness: hit /healthz (200 while awaiting setup or polling recently, 503 if wedged).
 # Uses python (no curl in the slim image). start-period covers first boot.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=45s --retries=3 \

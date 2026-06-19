@@ -347,14 +347,15 @@ def main():
     while True:
         try:
             # Account switched in Settings (Logout → new setup): once a *different* complete
-            # login is saved, exit so run.sh restarts the container and re-authenticates as the
-            # new account. The logged-out window (cleared creds, setup_complete=0) is skipped by
-            # the is_setup_complete() guard. History is keyed by VIN — the same car carries over.
+            # login is saved, exit with the RELAUNCH code (42) so run.sh re-launches the poller
+            # in-process and re-authenticates as the new account — works even with no container
+            # restart policy. The logged-out window (cleared creds, setup_complete=0) is skipped
+            # by the is_setup_complete() guard. History is keyed by VIN — the same car carries over.
             if db.is_setup_complete():
                 _login_now = load_config(db)
                 if (_login_now["username"], _login_now["password"], _login_now["pin"]) != _startup_login:
                     log.info("Leapmotor account changed in Settings — restarting poller to re-authenticate")
-                    os._exit(0)
+                    os._exit(42)
 
             # Apply user-tunable poll cadence + charge-detection floor (Settings) live, each cycle
             try:

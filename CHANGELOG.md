@@ -3,6 +3,18 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.25.2] — 2026-06-19
+
+### Fixed
+- **Running the standalone Docker image no longer dead-ends — the UI is reachable, data persists, and "Try the demo" works without a restart policy.** Three rough edges that hit anyone running the published image directly (especially via Docker Desktop's **Run** button):
+  - The image now declares **`EXPOSE 4000`**, so Docker Desktop's Run dialog pre-fills the port mapping instead of showing *"No ports exposed in this image"* (which left the UI unreachable).
+  - It now declares **`VOLUME /data`**, so trips/charges/login persist in an anonymous volume even if you forget `-v ...:/data`, instead of vanishing with the container.
+  - The data directory is now **created explicitly** at startup (it used to be created only as a side effect), with a clear error if `/data` isn't writable — no more cryptic *"unable to open database file"* crash on first boot.
+- **In-app relaunches ("Try the demo" / "Exit demo" and the account switch) no longer need a container restart policy.** They used to rely on the orchestrator recreating the container; a plain `docker run` / Docker Desktop "Run" sets no restart policy, so pressing **"Try the demo"** stopped the container and looked like a crash. The entrypoint now relaunches Mate **in-process**, so the toggles work everywhere. (Home Assistant add-on and policy-managed setups are unaffected.)
+
+### Changed
+- Removed an unused leftover translation key (`cmd_wait_next`) in all four languages.
+
 ## [1.25.1] — 2026-06-18
 
 ### Changed

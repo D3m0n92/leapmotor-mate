@@ -3,6 +3,14 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.27.0] — 2026-06-19
+
+### Added
+- **V2L (vehicle-to-load) monitoring — a first for any Leapmotor tool.** When the car powers an external device through the V2L adapter, Mate now shows it. The Overview gets a live **V2L block** (status, instantaneous **net power** in watts with a 0–3500 W bar, and energy drawn this session) that refreshes every **10 s** while a session is running; the Statistics page gets a **Total V2L** card with the cumulative energy drawn over all time; and **three MQTT entities** are published to Home Assistant — **`V2L Active`** (binary), **`V2L Power`** (W) and **`V2L Session Energy`** (Wh). Power is reported **net of the car's own ~300 W overhead** (the idle baseline frozen when V2L starts), so it matches what your device actually draws — not the gross battery output. It's **read-only** (V2L can't be triggered remotely: the car needs Park + a connected device). Discovered entirely by on-car testing — the car reports V2L on the battery current/voltage signals plus an AC-port flag, with an honest resolution floor of **~42 W** (the car's own 0.1 A current resolution, so a 10 W phone charger stays invisible). While V2L is active the poller drops to a **10 s** cadence so power changes aren't missed, and V2L discharge is **excluded from the parked "vampire drain"** metric so a session powering a fridge never reads as battery loss.
+
+### Fixed
+- **The registration / delivery date on the Maintenance page can now be corrected.** Once set, it used to become read-only text with no way to fix a typo; it's now an editable field — click **✏️** next to the date to change it (the new value overwrites the old one).
+
 ## [1.26.0] — 2026-06-19
 
 ### Added

@@ -100,6 +100,16 @@
     {% else %}
     <div class="text-center py-6 text-slate-500 text-sm">{{ t('no_charges') }}</div>
     {% endif %}
+    {# V2L (vehicle-to-load) — ALWAYS shown, all fields, live via htmx: the "Last charge" card is
+       static, so the inner block self-refreshes every 10 s (matches the V2L poll cadence, so no
+       instantaneous-power sample is missed) to track the power during a session. We don't assume
+       which models lack it; the data decides. Read-only (needs P + device). #}
+    {% if v2l %}
+    <div class="mt-4 pt-4 border-t border-slate-700/60 space-y-2.5"
+         hx-get="api/v2l-card" hx-trigger="load, every 10s" hx-swap="innerHTML">
+      {% include "partials/v2l_card.html" %}
+    </div>
+    {% endif %}
   </div>
 
   <!-- Map (last known position) -->

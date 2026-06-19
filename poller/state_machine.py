@@ -76,6 +76,7 @@ class StateMachine:
     _alert_start_ts: float     = field(default=0.0,   repr=False)
     _parked_count: int         = field(default=0,     repr=False)
     _error_count: int          = field(default=0,     repr=False)
+    _v2l_active: bool          = field(default=False, repr=False)
 
     def update(self, data: VehicleData) -> list[StateEvent]:
         self._error_count = 0
@@ -89,6 +90,8 @@ class StateMachine:
         # Plug inserted OR charging active = charge session
         # plug_connected alone is enough to close the trip immediately
         is_charging = data.charging_status > 0 or data.plug_connected
+        # V2L (bidirectional discharge) is parked activity that changes with the load → poll fast.
+        self._v2l_active = getattr(data, "ac_port_mode", 0) == 2
         fp          = data.fingerprint()
         fp_changed  = (self._prev_fp is not None) and (fp != self._prev_fp)
 
@@ -183,6 +186,8 @@ class StateMachine:
 
     @property
     def poll_interval(self) -> int:
+        if self._v2l_active:
+            return self.poll_driving        # V2L discharge → poll fast (like a trip) to track power
         if self.state in (State.DRIVING, State.PARKED_ALERT):
             return self.poll_driving        # active / drive imminent → fast
         if self.state == State.UNKNOWN:

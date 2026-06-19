@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.26.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.27.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -267,6 +267,7 @@ async def overview(request: Request):
         page="overview", vehicle=vehicle, settings=settings,
         status=status, recent_trips=trips,
         last_charge=charges[0] if charges else None,
+        v2l=db_reader.get_v2l_status(),
         charge_limit=_configured_charge_limit(),
         car_resp=db_reader.command_responsiveness(),
     ))
@@ -424,6 +425,7 @@ async def statistics(request: Request):
     vehicle, _ = db_reader.get_vehicle()
     grouped  = db_reader.get_stats_grouped()
     totals   = db_reader.get_stats_summary()
+    totals["v2l_total_kwh"] = db_reader.get_v2l_total_kwh()
     return templates.TemplateResponse(request, "statistics.html", _ctx(
         page="statistics", vehicle=vehicle,
         grouped=grouped, totals=totals,
@@ -1637,6 +1639,14 @@ async def status_card(request: Request):
         status=status, vehicle=vehicle,
         car_resp=db_reader.command_responsiveness(),
     ))
+
+
+@app.get("/api/v2l-card", response_class=HTMLResponse)
+async def v2l_card(request: Request):
+    """The Overview's V2L block, refreshed live (every 10 s, matching the V2L poll cadence) so the
+    instantaneous power tracks the load during a session — the parent "Last charge" card is static."""
+    return templates.TemplateResponse(request, "partials/v2l_card.html",
+                                      _ctx(v2l=db_reader.get_v2l_status()))
 
 
 def _configured_charge_limit() -> int | None:

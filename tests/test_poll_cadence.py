@@ -33,3 +33,21 @@ def test_driving_and_parked_cadences_unchanged():
     assert sm.poll_interval == 30
     sm.state = State.CHARGING
     assert sm.poll_interval == 30
+
+
+def test_v2l_active_forces_fast_cadence():
+    # V2L discharge is parked activity whose power changes with the load → poll fast (like a trip),
+    # even in PARKED_ACTIVE and past the 5-min ALERT window. Clears back to parked cadence when it ends.
+    sm = _sm(parked=30, driving=10)
+    sm.state = State.PARKED_ACTIVE
+    sm._v2l_active = True
+    assert sm.poll_interval == 10
+    sm._v2l_active = False
+    assert sm.poll_interval == 30
+
+
+def test_update_with_v2l_signal_enables_fast_cadence():
+    from client import _parse_signal
+    sm = _sm(parked=30, driving=10)
+    sm.update(_parse_signal("VIN", {"47": "2", "100003": "79", "1010": "0"}))   # parked + V2L active
+    assert sm._v2l_active is True and sm.poll_interval == 10

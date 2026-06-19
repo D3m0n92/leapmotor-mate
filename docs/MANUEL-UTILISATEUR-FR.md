@@ -1,6 +1,6 @@
 # LeapMotor Mate — Manuel utilisateur
 
-> **Version de Mate :** v1.22.5 · **Langue :** Français (première édition)
+> **Version de Mate :** v1.27.0 · **Langue :** Français (première édition)
 > Ce manuel s'adresse à celles et ceux qui *utilisent* Mate, et non à ceux qui le développent. Il explique
 > comment le configurer depuis le début et ce que fait chaque page. Pour les détails techniques internes, voir `ARCHITECTURE.md`.
 
@@ -217,6 +217,14 @@ Plus bas, vous trouvez des mini-statistiques et un **indicateur de « réactivit
 🟢/🟡/🔴, ⚪ s'il n'y a pas de données) : il résume à quel point la voiture a répondu aux dernières commandes
 envoyées.
 
+Quand la voiture alimente un appareil externe via l'adaptateur **V2L** (vehicle-to-load), l'Aperçu affiche un
+**bloc V2L** avec l'**état** (Actif / Inactif), la **puissance instantanée** en watts — indiquée **nette de la
+consommation propre de la voiture (~300 W)** pour correspondre à ce que votre appareil consomme réellement,
+avec une barre 0–3500 W — et l'**énergie soutirée durant la session** ; il se rafraîchit environ toutes les
+**10 s** pendant une session. Le bloc est en **lecture seule** : le V2L se déclenche depuis la voiture (levier
+sur P + un appareil branché), pas depuis Mate. Il est précis à partir d'environ **42 W** (la résolution du
+capteur de courant de la voiture — une petite charge de ~10 W reste invisible).
+
 ### Trajets
 **(menu : Trajets)** — La liste de vos déplacements, un par conduite. Pour chaque trajet, vous voyez
 **distance, durée, consommation (kWh/100 km), énergie récupérée** au freinage et le **coût** estimé.
@@ -266,7 +274,8 @@ trajets (calculé sur le prix « moyen » de l'énergie en batterie au moment du
 **(menu : Statistiques)** — Vos moyennes et totaux dans le temps : **distance totale** et nombre de trajets,
 **distance moyenne par trajet**, **temps de conduite**, **consommation moyenne** (pondérée sur la distance) et
 **meilleure**, **énergie consommée et rechargée**, **récupération** totale et moyenne, nombre de **sessions de
-recharge**, avec les **tendances** correspondantes (efficacité et récupération dans le temps).
+recharge**, avec les **tendances** correspondantes (efficacité et récupération dans le temps). Les totaux
+incluent désormais une carte **Total V2L** avec l'énergie cumulée soutirée via V2L sur tout l'historique.
 
 ### Rapport mensuel
 **(menu : Rapport mensuel)** — Une synthèse **mois par mois** : combien vous avez roulé, combien d'énergie vous
@@ -290,6 +299,8 @@ car c'est la première échéance atteinte qui compte.
 - Pour une **voiture neuve** qui n'a pas encore d'historique, vous pouvez définir une **date/un kilométrage de
   référence** afin que les échéances partent de la livraison (« première révision dans… ») au lieu d'apparaître
   comme « jamais effectué ».
+- La **date d'immatriculation / de livraison est désormais modifiable** : cliquez sur le **✏️** à côté de la
+  date enregistrée pour corriger une erreur (la nouvelle valeur écrase l'ancienne).
 - Les distances respectent l'unité choisie (km ou miles).
 
 ### Commandes
@@ -443,7 +454,7 @@ Envoie la télémétrie de la voiture à ABRP pour la planification d'itinérair
 
 ### MQTT → Home Assistant
 Publie l'état de la voiture (charge, autonomie, position, portes, état de charge…) sous forme d'**entités dans
-Home Assistant**, avec **auto-discovery**. Vous pouvez aussi **commander** la voiture depuis les entités de HA — y compris une **limite de charge** (`number` modifiable) pour régler le SoC cible.
+Home Assistant**, avec **auto-discovery**. Vous pouvez aussi **commander** la voiture depuis les entités de HA — y compris une **limite de charge** (`number` modifiable) pour régler le SoC cible. Trois nouvelles entités V2L en lecture seule sont publiées : **`V2L Active`** (binary sensor), **`V2L Power`** (W) et **`V2L Session Energy`** (Wh).
 
 1. Préparez un **broker MQTT** (généralement le module complémentaire *Mosquitto* dans Home Assistant).
 2. Dans *Paramètres → MQTT*, activez **Activé** et renseignez :
@@ -543,7 +554,7 @@ données **avec sa `secret.key`**.
 
 ---
 
-> 📌 **Note de maintenance du manuel.** Ce document décrit la version **v1.22.5**. Quand quelque chose de
+> 📌 **Note de maintenance du manuel.** Ce document décrit la version **v1.27.0**. Quand quelque chose de
 > visible par l'utilisateur change (une nouvelle page, une option, un flux), mettez à jour la section
 > correspondante et la ligne de version en haut. Il est conçu comme base pour les traductions (EN/FR/DE) : la
 > structure est volontairement la même que celle de l'interface.

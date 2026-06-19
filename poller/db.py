@@ -282,6 +282,11 @@ class Database:
                    "door_rear_right_open", "window_fl_open", "window_rl_open"):
             if _c not in cols:
                 self._conn.execute(f"ALTER TABLE positions ADD COLUMN {_c} INTEGER DEFAULT NULL")
+        # migration: AC-port / V2L mode (signal 47). 0 idle / 1 AC charging / 2 V2L discharge. Lets the
+        # V2L monitor read per-poll mode AND lets get_vampire_drain EXCLUDE V2L periods (a parked V2L
+        # discharge must NOT be counted as standby/vampire drain).
+        if "ac_port_mode" not in cols:
+            self._conn.execute("ALTER TABLE positions ADD COLUMN ac_port_mode INTEGER DEFAULT NULL")
         # migration: per-charge wallbox AC energy (the "wallbox, to pay" figure) on existing DBs
         ccols = {r[1] for r in self._conn.execute("PRAGMA table_info(charges)").fetchall()}
         if "ac_energy_kwh" not in ccols:
@@ -641,8 +646,8 @@ class Database:
                 remaining_charge_min, charge_voltage_v, charge_current_a, ready, charge_completed, security_active,
                 windows_open_count,
                 door_driver_open, door_passenger_open, door_rear_left_open, door_rear_right_open,
-                window_fl_open, window_rl_open)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                window_fl_open, window_rl_open, ac_port_mode)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 vehicle_id, _now_iso(),
                 data.latitude, data.longitude, data.speed_kmh, data.odometer_km,
@@ -672,6 +677,7 @@ class Database:
                 1 if data.door_rear_right_open else 0,
                 1 if data.window_fl_open else 0,
                 1 if data.window_rl_open else 0,
+                data.ac_port_mode,
             ),
         )
         self._conn.commit()

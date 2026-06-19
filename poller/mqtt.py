@@ -6,6 +6,7 @@ or publish errors are logged, never raised to the poller loop.
 """
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
@@ -33,6 +34,14 @@ class MqttService:
         self.on_command = None          # callback(vin, command_or_entity, value)
         self._discovery_sent = False
         self.last_climate_on = None     # latest polled A/C state, for the "A/C Off" toggle guard
+        # V2L live state: the idle baseline current (I0) frozen at session start, the running session
+        # energy, and the previous-poll idle current that seeds I0. Mirrors the net-power math that
+        # db_reader.get_v2l_sessions rebuilds from the positions log for history.
+        self._v2l_active = False
+        self._v2l_i0_a = 0.0
+        self._v2l_prev_current = 0.0
+        self._v2l_energy_wh = 0.0
+        self._v2l_last_mono = None
 
     def connect(self) -> bool:
         log.info("MQTT: connecting to %s:%d (TLS=%s, discovery=%s, prefix=%s)",
@@ -105,6 +114,30 @@ class MqttService:
             self._discovery_sent = True
         self._publish_sensors(data)
 
+    def _v2l_live(self, data):
+        """Live V2L numbers for MQTT: NET discharge power (gross minus the idle baseline I0 frozen at
+        session start, so the car's own overhead isn't billed to the external load) and the energy
+        accumulated this session. Returns (active, power_w, energy_wh). The net-power gate also means
+        a latched 47==2 with the load off reads 0 W and stops accruing energy."""
+        now = time.monotonic()
+        if data.ac_port_mode == 2:
+            if not self._v2l_active:                       # session just started → freeze the baseline
+                self._v2l_i0_a = max(0.0, self._v2l_prev_current)
+                self._v2l_energy_wh = 0.0
+                self._v2l_last_mono = now
+                self._v2l_active = True
+            net_w = max(0.0, data.charge_current_a - self._v2l_i0_a) * data.charge_voltage_v
+            if self._v2l_last_mono is not None:
+                dt_h = (now - self._v2l_last_mono) / 3600.0
+                if 0 < dt_h <= 5 / 60:                     # ignore sleep/offline gaps > 5 min
+                    self._v2l_energy_wh += net_w * dt_h
+            self._v2l_last_mono = now
+            return True, round(net_w), round(self._v2l_energy_wh, 1)
+        # not in V2L → remember this idle current to seed the next session's baseline; reset live values
+        self._v2l_active = False
+        self._v2l_prev_current = data.charge_current_a
+        return False, 0, 0.0
+
     def _publish_sensors(self, data):
         base = f"{self.topic_prefix}/{data.vin}"
 
@@ -125,6 +158,10 @@ class MqttService:
         pub("charge_time_remaining", data.remaining_charge_min)
         if data.charge_limit_percent is not None:   # absent on some models (T03) → keep last retained value
             pub("charge_limit", data.charge_limit_percent)
+        v2l_on, v2l_w, v2l_wh = self._v2l_live(data)
+        pub("v2l_active", v2l_on)
+        pub("v2l_power", v2l_w)
+        pub("v2l_energy_session", v2l_wh)
         pub("battery_temp", data.battery_min_temp)
         pub("inside_temp", data.inside_temp)
         pub("ac_target_temp", data.climate_target_temp)
@@ -206,6 +243,8 @@ class MqttService:
             ("charge_voltage", "Charge Voltage", {"dc": "voltage", "unit": "V"}),
             ("charge_current", "Charge Current", {"dc": "current", "unit": "A"}),
             ("charge_time_remaining", "Charge Time Remaining", {"dc": "duration", "unit": "min"}),
+            ("v2l_power", "V2L Power", {"dc": "power", "unit": "W", "icon": "mdi:home-lightning-bolt"}),
+            ("v2l_energy_session", "V2L Session Energy", {"unit": "Wh", "icon": "mdi:lightning-bolt"}),
             ("tire_fl", "Tyre FL", {"dc": "pressure", "unit": "bar", "icon": "mdi:tire"}),
             ("tire_fr", "Tyre FR", {"dc": "pressure", "unit": "bar", "icon": "mdi:tire"}),
             ("tire_rl", "Tyre RL", {"dc": "pressure", "unit": "bar", "icon": "mdi:tire"}),
@@ -246,6 +285,7 @@ class MqttService:
         binaries = [
             ("charging", "Charging", "battery_charging"), ("locked", "Locked", "lock"),
             ("plug_connected", "Plug Connected", "plug"), ("climate_on", "Climate", "power"),
+            ("v2l_active", "V2L Active", "power"),
             # Friendly names are physical positions (signals 1277=lbcm/left, 1278=rbcm/right) — the old
             # "Driver/Passenger" labels were wrong on RHD cars. Entity object_ids kept (no HA churn).
             ("door_driver", "Door Front Left", "door"), ("door_passenger", "Door Front Right", "door"),

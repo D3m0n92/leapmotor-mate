@@ -14,14 +14,15 @@ def _setup(monkeypatch, rows):
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
     con.execute("CREATE TABLE positions (recorded_at TEXT, soc REAL, charging INT, "
-                "speed_kmh REAL, odometer_km REAL)")
-    con.executemany("INSERT INTO positions VALUES (?,?,?,?,?)", rows)
+                "speed_kmh REAL, odometer_km REAL, ac_port_mode INT)")
+    con.executemany("INSERT INTO positions VALUES (?,?,?,?,?,?)", rows)
     con.commit()
     monkeypatch.setattr(db_reader, "_get", lambda: con)
 
 
-def P(hhmm, soc, charging=0, speed=0, odo=1000.0):
-    return (f"2026-06-08T{hhmm}:00+00:00", soc, charging, speed, odo)
+def P(hhmm, soc, charging=0, speed=0, odo=1000.0, acmode=0):
+    # acmode = positions.ac_port_mode: 0 idle / 1 AC charging / 2 V2L discharge
+    return (f"2026-06-08T{hhmm}:00+00:00", soc, charging, speed, odo, acmode)
 
 
 def test_basic_parked_drain(monkeypatch):
@@ -134,3 +135,22 @@ def test_typical_is_time_weighted_and_counts_zero_drop_parks(monkeypatch):
     assert out["count"] == 1
     assert out["windows"][0]["pct_per_day"] == 4.0
     assert out["typical_pct_per_day"] == 1.3
+
+
+def test_v2l_discharge_is_excluded_from_drain(monkeypatch):
+    # Parked + V2L active (ac_port_mode=2) powering an external load: SoC drops fast, but that's
+    # bidirectional-discharge OUTPUT, not standby drain. It must be carved out of the vampire metric
+    # exactly like charging — never charted, never in the headline. Without the exclusion the whole
+    # 00:00→10:30 span fuses into ONE 6.4%/10.5h ≈ 14.6 %/day window (under the 15%/day active-use
+    # gate, so it would NOT self-exclude) and a 1.4 kW V2L session reads as a huge "vampire drain".
+    _setup(monkeypatch, [
+        P("00:00", 80.0, odo=1000), P("04:00", 79.6, odo=1000),               # park A: real standby 0.4%/4h
+        P("04:15", 79.0, acmode=2, odo=1000), P("05:00", 76.0, acmode=2, odo=1000),
+        P("06:15", 74.0, acmode=2, odo=1000),                                 # V2L 79.6→74 — must be excluded
+        P("06:30", 74.0, odo=1000), P("10:30", 73.6, odo=1000),               # park B after V2L: 0.4%/4h
+    ])
+    out = db_reader.get_vampire_drain(lookback_days=BIG)
+    # Only the two genuine standby parks survive; the V2L discharge window is gone.
+    assert sorted(w["drop_pct"] for w in out["windows"]) == [0.4, 0.4]
+    assert all(w["drop_pct"] < 1.0 for w in out["windows"])          # no V2L drop leaked into a window
+    assert out["typical_pct_per_day"] is not None and out["typical_pct_per_day"] < 5

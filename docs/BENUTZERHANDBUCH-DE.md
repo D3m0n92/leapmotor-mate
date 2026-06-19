@@ -1,6 +1,6 @@
 # LeapMotor Mate — Benutzerhandbuch
 
-> **Mate-Version:** v1.22.5 · **Sprache:** Deutsch (erste Ausgabe)
+> **Mate-Version:** v1.27.0 · **Sprache:** Deutsch (erste Ausgabe)
 > Dieses Handbuch richtet sich an alle, die Mate *nutzen*, nicht an die, die es entwickeln. Es erklärt, wie
 > Sie es von Grund auf einrichten und was jede Seite tut. Für die internen technischen Details gibt es `ARCHITECTURE.md`.
 
@@ -203,6 +203,14 @@ Live-Status:
 - ein Schild **„Kabel angeschlossen / Laden abgeschlossen"**, wenn das Kabel eingesteckt ist, aber gerade nicht
   aktiv geladen wird.
 
+Wenn das Auto über den **V2L-Adapter** (Vehicle-to-Load) ein externes Gerät versorgt, erscheint ein **V2L-Block**
+mit dem **Status** (Aktiv / Inaktiv), der **Momentanleistung** in Watt — angegeben **abzüglich des Eigenverbrauchs
+des Autos (~300 W)**, sodass sie dem entspricht, was Ihr Gerät tatsächlich zieht — mit einem **0–3500-W-Balken**
+und der **in der Sitzung entnommenen Energie**. Er aktualisiert sich etwa alle **10 s**, solange eine Sitzung
+läuft. Der Block ist **schreibgeschützt**: V2L wird am Auto gestartet (Gang auf **P** + ein angeschlossenes Gerät),
+nicht aus Mate. Erkannt wird ab etwa **42 W** (der Auflösung des Stromsensors des Autos — eine winzige ~10-W-Last
+bleibt unsichtbar).
+
 Weiter unten finden Sie Ministatistiken und einen **Indikator für die „Fahrzeug-Reaktion"** (ein Punkt
 🟢/🟡/🔴, ⚪ wenn keine Daten vorliegen): Er fasst zusammen, wie zuverlässig das Auto auf die zuletzt gesendeten
 Befehle reagiert hat.
@@ -253,7 +261,9 @@ auf dem „durchschnittlichen" Energiepreis in der Batterie zum Zeitpunkt der Fa
 **(Menü: Statistik)** — Ihre Durchschnitte und Summen über die Zeit: **Gesamtstrecke** und Anzahl der Fahrten,
 **durchschnittliche Strecke pro Fahrt**, **Fahrzeit**, **durchschnittlicher Verbrauch** (gewichtet nach der
 Strecke) und **bester**, **verbrauchte und geladene Energie**, **Rekuperation** insgesamt und im Durchschnitt,
-Anzahl der **Ladesitzungen**, mit den entsprechenden **Trends** (Effizienz und Rekuperation über die Zeit).
+Anzahl der **Ladesitzungen**, mit den entsprechenden **Trends** (Effizienz und Rekuperation über die Zeit). Die
+Summen enthalten jetzt auch eine Karte **V2L gesamt** mit der über die gesamte Historie via V2L entnommenen
+kumulierten Energie.
 
 ### Monatsbericht
 **(Menü: Monatsbericht)** — Eine Zusammenfassung **Monat für Monat**: wie viel Sie gefahren sind, wie viel Energie
@@ -276,6 +286,8 @@ zuerst eintritt.
   Fälligkeit wird neu berechnet.
 - Für ein **neues Auto** ohne Vorgeschichte können Sie ein **Referenzdatum/-kilometerstand** festlegen, damit die
   Fälligkeiten ab der Übergabe starten („erste Inspektion in…") statt als „nie durchgeführt" zu erscheinen.
+- Das **Zulassungs-/Übergabedatum** ist jetzt editierbar: Klicken Sie auf das **✏️** neben dem gespeicherten
+  Datum, um einen Fehler zu korrigieren (der neue Wert überschreibt den alten).
 - Die Strecken berücksichtigen die gewählte Einheit (km oder Meilen).
 
 ### Befehle
@@ -426,7 +438,7 @@ Sendet die Telemetrie des Autos an ABRP für die Routenplanung in Echtzeit.
 
 ### MQTT → Home Assistant
 Veröffentlicht den Zustand des Autos (Ladung, Reichweite, Position, Türen, Ladezustand…) als **Entitäten in Home
-Assistant**, mit **Auto-Discovery**. Sie können das Auto auch über die Entitäten von HA **steuern** — einschließlich eines beschreibbaren **Ladelimits** (`number`) zum Einstellen des Ziel-SoC.
+Assistant**, mit **Auto-Discovery**. Sie können das Auto auch über die Entitäten von HA **steuern** — einschließlich eines beschreibbaren **Ladelimits** (`number`) zum Einstellen des Ziel-SoC. Hinzu kommen drei neue **schreibgeschützte** V2L-Entitäten: **`V2L Active`** (Binärsensor), **`V2L Power`** (W) und **`V2L Session Energy`** (Wh).
 
 1. Bereiten Sie einen **MQTT-Broker** vor (üblicherweise das *Mosquitto*-Add-on in Home Assistant).
 2. Aktivieren Sie unter *Einstellungen → MQTT* die Option **MQTT aktivieren** und füllen Sie aus:
@@ -527,7 +539,7 @@ Unter *Einstellungen → Export/Backup* laden Sie die Datenbank (und die CSVs) h
 
 ---
 
-> 📌 **Hinweis zur Pflege des Handbuchs.** Dieses Dokument beschreibt die Version **v1.22.5**. Wenn sich etwas für
+> 📌 **Hinweis zur Pflege des Handbuchs.** Dieses Dokument beschreibt die Version **v1.27.0**. Wenn sich etwas für
 > den Benutzer Sichtbares ändert (eine neue Seite, eine Option, ein Ablauf), aktualisieren Sie den entsprechenden
 > Abschnitt und die Versionszeile oben. Es ist als Grundlage für die Übersetzungen (EN/FR/DE) gedacht: Die Struktur
 > ist bewusst dieselbe wie die der Oberfläche.

@@ -1,6 +1,6 @@
 # LeapMotor Mate — Manuale utente
 
-> **Versione di Mate:** v1.22.5 · **Lingua:** Italiano (prima edizione)
+> **Versione di Mate:** v1.27.0 · **Lingua:** Italiano (prima edizione)
 > Questo manuale è pensato per chi *usa* Mate, non per chi lo sviluppa. Spiega come configurarlo
 > dall'inizio e cosa fa ogni pagina. Per i dettagli tecnici interni c'è `ARCHITECTURE.md`.
 
@@ -203,6 +203,14 @@ lo stato dal vivo:
 - una targhetta **"Cavo collegato / Carica completa"** quando il cavo è inserito ma non si sta
   caricando attivamente.
 
+Quando l'auto alimenta un dispositivo esterno tramite l'adattatore **V2L** (vehicle-to-load), la
+Panoramica mostra un **blocco V2L** con lo **stato** (Attivo / Non attivo), la **potenza istantanea**
+in watt — riportata **al netto dell'overhead dell'auto (~300 W)**, così da corrispondere a ciò che il
+dispositivo consuma davvero — con una barra 0–3500 W, e l'**energia prelevata nella sessione**; si
+aggiorna circa ogni **10 s** mentre una sessione è in corso. È **di sola lettura**: il V2L si attiva
+dall'auto (cambio in P + un dispositivo collegato), non da Mate. È accurato da circa **42 W** in su
+(la risoluzione del sensore di corrente dell'auto — un carico minuscolo da ~10 W resta invisibile).
+
 Più in basso trovi mini-statistiche e un **indicatore di "reattività auto"** (un pallino
 🟢/🟡/🔴, ⚪ se non ci sono dati): riassume quanto l'auto ha risposto agli ultimi comandi inviati.
 
@@ -254,7 +262,8 @@ costo dei viaggi (calcolato sul prezzo "medio" dell'energia in batteria al momen
 **(menu: Statistiche)** — Le tue medie e i totali nel tempo: **distanza totale** e numero di viaggi,
 **distanza media per viaggio**, **tempo di guida**, **consumo medio** (pesato sulla distanza) e
 **migliore**, **energia usata e ricaricata**, **recupero** totale e medio, numero di **sessioni di
-ricarica**, con le relative **tendenze** (efficienza e recupero nel tempo).
+ricarica**, con le relative **tendenze** (efficienza e recupero nel tempo). Tra i totali c'è anche una
+scheda **Totale V2L** con l'energia cumulativa prelevata via V2L in tutto lo storico.
 
 ### Report mensile
 **(menu: Report mensile)** — Una sintesi **mese per mese**: quanto hai guidato, quanta energia hai
@@ -278,6 +287,8 @@ il **tempo**, perché scade ciò che arriva prima.
 - Per un'**auto nuova** che non ha ancora storico, puoi impostare una **data/chilometraggio di
   riferimento** così le scadenze partono dalla consegna ("primo tagliando tra…") invece di risultare
   "mai eseguito".
+- La **data di immatricolazione/consegna è modificabile**: clicca la **✏️** accanto alla data
+  impostata per correggere un errore (il nuovo valore sovrascrive il precedente).
 - Le distanze rispettano l'unità scelta (km o miglia).
 
 ### Comandi
@@ -432,7 +443,10 @@ Invia la telemetria dell'auto ad ABRP per la pianificazione viaggi in tempo real
 
 ### MQTT → Home Assistant
 Pubblica lo stato dell'auto (carica, autonomia, posizione, porte, stato ricarica…) come **entità in
-Home Assistant**, con **auto-discovery**. Puoi anche **comandare** l'auto dalle entità di HA — incluso un **limite di carica** (`number` scrivibile) per impostare il SoC target.
+Home Assistant**, con **auto-discovery**. Tra queste, tre nuove entità V2L **di sola lettura**:
+**`V2L Active`** (binary sensor), **`V2L Power`** (W) e **`V2L Session Energy`** (Wh). Puoi anche
+**comandare** l'auto dalle entità di HA — incluso un **limite di carica** (`number` scrivibile) per
+impostare il SoC target.
 
 1. Prepara un **broker MQTT** (di solito l'add-on *Mosquitto* in Home Assistant).
 2. In *Impostazioni → MQTT*, attiva **Abilita MQTT** e compila:
@@ -531,7 +545,7 @@ Da *Impostazioni → Esporta/backup* scarichi il database (e i CSV). Conserva il
 
 ---
 
-> 📌 **Nota di manutenzione del manuale.** Questo documento descrive la versione **v1.22.5**. Quando
+> 📌 **Nota di manutenzione del manuale.** Questo documento descrive la versione **v1.27.0**. Quando
 > cambia qualcosa di visibile all'utente (una pagina nuova, un'opzione, un flusso), aggiorna la
 > sezione corrispondente e la riga di versione in alto. È pensato come base per le traduzioni
 > (EN/FR/DE): la struttura è volutamente la stessa dell'interfaccia.

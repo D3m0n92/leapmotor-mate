@@ -1,6 +1,6 @@
 # LeapMotor Mate — User Manual
 
-> **Mate version:** v1.22.5 · **Language:** English (first edition)
+> **Mate version:** v1.27.0 · **Language:** English (first edition)
 > This manual is written for people who *use* Mate, not for those who develop it. It explains how to
 > set it up from scratch and what every page does. For the internal technical details, see `ARCHITECTURE.md`.
 
@@ -203,6 +203,14 @@ status:
 - a **"Cable connected / Charge complete"** tag when the cable is plugged in but it isn't actively
   charging.
 
+When the car is **powering an external device through the V2L (vehicle-to-load) adapter**, the
+Overview shows a **V2L block** with the **status** (Active / Inactive), the **instantaneous power** in
+watts — reported **net of the car's own ~300 W overhead**, so it matches what your device actually
+draws — with a 0–3500 W bar, and the **energy drawn this session**. It refreshes about every **10 s**
+while a session is running. It is **read-only**: V2L is started **on the car** (gear in Park + a device
+connected), not from Mate. It is accurate from about **42 W** upward (the car's own current-sensor
+resolution — a tiny ~10 W load stays invisible).
+
 Further down you'll find mini-statistics and a **"Car responsiveness" indicator** (a 🟢/🟡/🔴 dot, ⚪
 if there's no data): it summarizes how well the car has responded to the latest commands sent.
 
@@ -253,7 +261,8 @@ The **Home** price is the one that feeds the cost of home charges and, in turn, 
 **(menu: Statistics)** — Your averages and totals over time: **total distance** and number of trips,
 **average distance per trip**, **drive time**, **average consumption** (weighted by distance) and
 **best**, **energy used and charged**, total and average **regen**, number of **charge sessions**,
-with the related **trends** (efficiency and regen over time).
+with the related **trends** (efficiency and regen over time). The totals also include a **Total V2L**
+card showing the cumulative energy drawn via V2L over all time.
 
 ### Monthly Report
 **(menu: Monthly Report)** — A summary **month by month**: how much you drove, how much energy you
@@ -276,6 +285,8 @@ because whatever comes first is what's due.
   recalculated.
 - For a **new car** that has no history yet, you can set a **reference date/mileage** so the due dates
   start from delivery ("first service in…") instead of showing up as "never done".
+- The **registration / delivery date is now editable**: click the **✏️** next to the saved date to
+  correct a mistake (the new value overwrites the old one).
 - The distances respect the chosen unit (km or miles).
 
 ### Commands
@@ -427,7 +438,7 @@ Sends the car's telemetry to ABRP for real-time trip planning.
 
 ### MQTT → Home Assistant
 Publishes the car's status (charge, range, position, doors, charge status…) as **entities in Home
-Assistant**, with **auto-discovery**. You can also **command** the car from the HA entities — including a writable **Charge Limit** number to set the target SoC.
+Assistant**, with **auto-discovery**. You can also **command** the car from the HA entities — including a writable **Charge Limit** number to set the target SoC. The published entities also include three read-only V2L ones: **`V2L Active`** (binary sensor), **`V2L Power`** (W) and **`V2L Session Energy`** (Wh).
 
 1. Get an **MQTT broker** ready (usually the *Mosquitto* add-on in Home Assistant).
 2. In *Settings → MQTT*, turn on **Enabled** and fill in:
@@ -525,7 +536,7 @@ its `secret.key`**.
 
 ---
 
-> 📌 **Manual maintenance note.** This document describes version **v1.22.5**. When something visible
+> 📌 **Manual maintenance note.** This document describes version **v1.27.0**. When something visible
 > to the user changes (a new page, an option, a flow), update the corresponding section and the
 > version line at the top. It's meant as a base for the translations (EN/FR/DE): the structure is
 > deliberately the same as the interface.

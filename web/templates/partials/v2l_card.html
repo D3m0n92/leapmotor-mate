@@ -1,0 +1,19 @@
+{# V2L (vehicle-to-load) block content — refreshed live via htmx (api/v2l-card) so the instantaneous
+   power updates during a session. ALL fields shown in every state; status word right-aligned. #}
+<div class="flex items-center justify-between">
+  <span class="inline-flex items-center gap-2 text-sm font-semibold {{ 'text-emerald-400' if v2l.active else 'text-slate-400' }}">
+    <span class="w-2 h-2 rounded-full {{ 'bg-emerald-400 animate-pulse' if v2l.active else 'bg-slate-500' }}"></span>V2L
+  </span>
+  <span class="text-sm {{ 'text-emerald-400 font-semibold' if v2l.active else 'text-slate-500' }}">{{ t('v2l_status_on') if v2l.active else t('v2l_status_off') }}</span>
+</div>
+<div class="flex justify-between text-sm">
+  <span class="text-slate-400">{{ t('v2l_power') }}</span>
+  <span class="{{ 'text-emerald-400 font-semibold' if v2l.active else 'text-white' }}">{{ v2l.power_w }} W</span>
+</div>
+<div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+  <div class="h-full rounded-full {{ 'bg-emerald-400' if v2l.active else 'bg-slate-600' }}" style="width: {{ (v2l.power_w / v2l.power_max_w * 100) | round(1) }}%"></div>
+</div>
+<div class="flex justify-between text-sm">
+  <span class="text-slate-400">{{ t('v2l_drawn') }}</span>
+  <span class="text-white">{% if v2l.energy_wh >= 1000 %}{{ (v2l.energy_wh / 1000) | nice }} kWh{% else %}{{ v2l.energy_wh | nice }} Wh{% endif %}{% if not v2l.active and v2l.ever_used %} <span class="text-slate-500">· {{ v2l.duration }}</span>{% endif %}</span>
+</div>

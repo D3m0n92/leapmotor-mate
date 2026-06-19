@@ -83,6 +83,7 @@ _CHROME = {
     "baseline_hint":{"en": "Set the registration/delivery date so first-service due dates are accurate.", "it": "Imposta la data di immatricolazione/consegna per scadenze del primo tagliando accurate.", "fr": "Indiquez la date d'immatriculation/livraison pour des échéances de premier entretien exactes.", "de": "Geben Sie das Zulassungs-/Übergabedatum an, damit die ersten Service-Termine stimmen."},
     "baseline_save":{"en": "Set delivery date", "it": "Imposta data consegna", "fr": "Définir la date de livraison", "de": "Übergabedatum festlegen"},
     "baseline_set": {"en": "Delivery", "it": "Consegna", "fr": "Livraison", "de": "Übergabe"},
+    "baseline_edit":{"en": "edit", "it": "modifica", "fr": "modifier", "de": "ändern"},
     "all_good":     {"en": "Everything is up to date.", "it": "È tutto in regola.", "fr": "Tout est à jour.", "de": "Alles ist aktuell."},
     "next_first":   {"en": "First service", "it": "Primo tagliando", "fr": "Premier entretien", "de": "Erster Service"},
     "st_overdue":   {"en": "Overdue",   "it": "Scaduto", "fr": "En retard", "de": "Überfällig"},

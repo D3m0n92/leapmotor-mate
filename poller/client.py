@@ -74,6 +74,16 @@ class VehicleData:
     security_active: bool = False   # signal 1255 vehicleSecurityActive — locked + alarm armed (validate on-car)
     charge_limit_percent: int | None = None  # configured max-charge SoC (from the config block, not a
                                              # signal); None if unknown / model doesn't report it
+    # AC-port / V2L mode — signal 47 (acInputSlowCharge): 0 = AC port idle, 1 = AC charging (input;
+    # LATCHES at 1 for ~5-10 min after a charge, see _is_plugged_in), 2 = V2L bidirectional discharge
+    # active. Verified on-car 2026-06-19: V2L switch ON + adapter → 47=2, battery discharging (1178>0).
+    ac_port_mode: int = 0
+
+    @property
+    def v2l_active(self) -> bool:
+        """True when the AC port is in V2L / bidirectional-discharge mode (powering an external
+        load). The DELIVERED power is gated separately on real discharge current (1178)."""
+        return self.ac_port_mode == 2
 
     def fingerprint(self) -> tuple:
         """Compact snapshot of signals that indicate car activity."""
@@ -84,6 +94,7 @@ class VehicleData:
             self.any_door_open,
             self.charging_status,
             self.plug_connected,
+            self.ac_port_mode,         # V2L/charge engaging is activity → triggers the fast (alert) cadence
         )
 
 
@@ -475,6 +486,7 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         remaining_charge_min=int(sig.get("1200") or 0),
         charge_voltage_v=float(sig.get("1177") or 0),
         charge_current_a=float(sig.get("1178") or 0),
+        ac_port_mode=int(sig.get("47") or 0),    # 47 acInputSlowCharge: 0 idle / 1 AC charge / 2 V2L
         seat_heat_driver=int(sig.get("2100") or 0),
         seat_heat_passenger=int(sig.get("2118") or 0),
         seat_vent_driver=int(sig.get("2101") or 0),

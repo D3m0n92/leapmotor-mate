@@ -742,8 +742,8 @@ def save_fresh_signals(signals: dict) -> None:
             remaining_charge_min, charge_voltage_v, charge_current_a, charge_completed, security_active,
             windows_open_count,
             door_driver_open, door_passenger_open, door_rear_left_open, door_rear_right_open,
-            window_fl_open, window_rl_open
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            window_fl_open, window_rl_open, ac_port_mode
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             vehicle_id,
             datetime.now(timezone.utc).isoformat(),
@@ -767,6 +767,8 @@ def save_fresh_signals(signals: dict) -> None:
             1 if sig("1277") else 0, 1 if sig("1278") else 0,
             1 if sig("1279") else 0, 1 if sig("1280") else 0,
             1 if _wstates[0] else 0, 1 if _wstates[2] else 0,
+            int(signals.get("47") or 0),     # ac_port_mode — same as the poller; without it this
+                                             # web-side write left NULL, fragmenting V2L sessions (#)
         ),
     )
     db.commit()
@@ -2225,7 +2227,7 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
     floor = min(min_drop_pct, _VAMPIRE_NOISE_FLOOR)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
     rows = db.execute(
-        "SELECT recorded_at, soc, charging, speed_kmh, odometer_km FROM positions "
+        "SELECT recorded_at, soc, charging, speed_kmh, odometer_km, ac_port_mode FROM positions "
         "WHERE soc IS NOT NULL AND recorded_at >= ? ORDER BY recorded_at",
         (cutoff,),
     ).fetchall()
@@ -2283,7 +2285,11 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
 
     cur = None
     for r in rows:
-        idle = (not r["charging"]) and ((r["speed_kmh"] or 0) < 1)
+        # A V2L / bidirectional-discharge sample (ac_port_mode==2) is NOT standby: the car is parked
+        # but actively powering an external load, so that SoC loss is V2L output, not vampire drain.
+        # Treat it like charging — it BOUNDS the parked window and its drop is never read as drain.
+        v2l = r["ac_port_mode"] == 2
+        idle = (not r["charging"]) and (not v2l) and ((r["speed_kmh"] or 0) < 1)
         odo = r["odometer_km"]
         # a rise in odometer since the window's last idle sample → a drive happened (even if its
         # samples were missed) → the park ended there.
@@ -2291,13 +2297,14 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
                 and odo - cur["odo_last"] > 0.5):
             _flush(cur)
             cur = None
-        if not idle:                        # driving / charging now → park ended
+        if not idle:                        # driving / charging / V2L now → park ended
             # Close at the wake's fresh SoC only on a DRIVING transition (the odometer-rise guard
             # above already split off any drive that happened in a gap, so a same-odometer drive
             # sample here is a genuine wake-after-park → its SoC is real standby drain). A CHARGING
-            # transition is left as-is: the pre-charge gap is ambiguous (could be a drive to the
-            # charger), so we never infer drain from it.
-            _flush(cur, close=(None if r["charging"] else r))
+            # or V2L transition is left as-is: the pre-charge gap is ambiguous (could be a drive to
+            # the charger), and a V2L drop is bidirectional-discharge output (not standby) — so we
+            # never infer drain from either.
+            _flush(cur, close=(None if (r["charging"] or v2l) else r))
             cur = None
             continue
         if cur is None:                     # start a new parked window
@@ -2329,6 +2336,121 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
             "active_use_count": active_use_count,
             "min_drop_pct": round(min_drop_pct, 1),
             "typical_pct_per_day": typical, "lookback_days": lookback_days}
+
+
+# ── V2L (vehicle-to-load) discharge sessions ───────────────────────────────────
+# Reconstructed ON-READ from the per-poll `positions` log (ac_port_mode + battery current/voltage)
+# — same "pure read, no extra table" approach as get_vampire_drain. A session = a run of samples
+# with ac_port_mode==2 (V2L mode active, signal 47). Reported power is NET of the idle baseline
+# captured just before the session, so the car's own awake overhead (~300 W) is not attributed to
+# the external load. Battery current (charge_current_a / signal 1178) is SIGNED: positive = discharge.
+
+def get_v2l_sessions(lookback_days: int = 90, limit: int = 50, vehicle_id: int | None = None) -> dict:
+    db = _get()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    if vehicle_id is not None:   # use idx_positions_vehicle(vehicle_id, recorded_at) → fast range scan
+        rows = db.execute(
+            "SELECT recorded_at, soc, charge_current_a, charge_voltage_v, ac_port_mode FROM positions "
+            "WHERE vehicle_id = ? AND recorded_at >= ? ORDER BY recorded_at", (vehicle_id, cutoff),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT recorded_at, soc, charge_current_a, charge_voltage_v, ac_port_mode FROM positions "
+            "WHERE recorded_at >= ? ORDER BY recorded_at", (cutoff,),
+        ).fetchall()
+
+    def _close(c, ongoing=False):
+        s = c["samples"]
+        # Integrate net power over time (left-rectangle per gap). Gaps outside (0, 1h] are skipped so
+        # a sleep/offline hole between two V2L samples can never invent energy.
+        energy_wh, peak_w = 0.0, 0.0
+        for k in range(len(s)):
+            peak_w = max(peak_w, s[k][1])
+            if k:
+                dt_h = (s[k][0] - s[k - 1][0]).total_seconds() / 3600.0
+                if 0 < dt_h <= 1.0:
+                    energy_wh += s[k - 1][1] * dt_h
+        soc_used = round((c["soc0"] or 0) - (c["soc_last"] or 0), 1)
+        return {
+            "start": c["t0"].isoformat(), "end": c["t_last"].isoformat(),
+            "duration_min": round((c["t_last"] - c["t0"]).total_seconds() / 60.0, 1),
+            "energy_wh": round(energy_wh, 1),
+            "peak_w": round(peak_w),
+            "current_w": round(s[-1][1]) if s else 0,    # latest sample's net power (instantaneous)
+            "baseline_w": round(c["i0"] * (c["v_ref"] or 0.0)),
+            "soc_used_pct": soc_used if soc_used > 0 else 0.0,
+            "ongoing": ongoing,
+        }
+
+    sessions, cur, baseline_a = [], None, 0.0   # baseline_a = last non-V2L (awake idle) discharge current
+    for r in rows:
+        mode = r["ac_port_mode"]
+        if mode is None:
+            continue   # web-side live writes can leave ac_port_mode NULL — skip so they neither SPLIT a
+                       # session (NULL != 2 would close it) NOR corrupt baseline_a with their own current
+        i = float(r["charge_current_a"] or 0.0)
+        v = float(r["charge_voltage_v"] or 0.0)
+        if mode != 2:                            # not in V2L → close any open session, refresh baseline
+            if cur is not None:
+                sessions.append(_close(cur)); cur = None
+            if i > 0:                            # positive = discharge → the awake idle overhead (I0)
+                baseline_a = i
+            continue
+        t = _local_dt(r["recorded_at"])
+        if t is None:
+            continue
+        if cur is None:                          # V2L just started → open a session, freeze its baseline
+            cur = {"t0": t, "t_last": t, "i0": max(0.0, baseline_a), "v_ref": v,
+                   "soc0": r["soc"], "soc_last": r["soc"], "samples": []}
+        cur["samples"].append((t, max(0.0, i - cur["i0"]) * v))    # NET power, clamped at 0
+        cur["t_last"], cur["soc_last"] = t, r["soc"]
+
+    if cur is not None:
+        sessions.append(_close(cur, ongoing=True))
+
+    sessions = sessions[-limit:]
+    return {"sessions": sessions, "count": len(sessions),
+            "total_energy_wh": round(sum(s["energy_wh"] for s in sessions), 1),
+            "lookback_days": lookback_days}
+
+
+def get_v2l_status(lookback_days: int = 7) -> dict:
+    """Compact V2L summary for the Overview card — ALWAYS shown (we don't gate on model; the data
+    decides). Idle until a V2L session appears, then live net power. `ever_used` separates
+    idle-with-history from never-used; `power_max_w` (3500 W) scales the UI bar. Vehicle-scoped + a
+    short lookback so the Overview's 10 s htmx auto-refresh stays a cheap indexed range scan."""
+    try:
+        veh, _ = get_vehicle()
+        vehicle_id = veh.get("id") if veh else None
+    except Exception:  # noqa: BLE001
+        vehicle_id = None
+    recent = get_v2l_sessions(lookback_days=lookback_days, limit=1, vehicle_id=vehicle_id)["sessions"]
+    last = recent[-1] if recent else None
+    active = bool(last and last.get("ongoing"))
+    dur_min = int(round(last["duration_min"])) if last else 0
+    return {
+        "has_data": True,                          # always visible — never hide a feature on a guess
+        "ever_used": last is not None,
+        "active": active,
+        "power_w": last["current_w"] if active else 0,
+        "energy_wh": last["energy_wh"] if last else 0.0,
+        "peak_w": last["peak_w"] if last else 0,
+        "end": last["end"] if last else None,
+        "duration": f"{dur_min // 60:02d}:{dur_min % 60:02d}",   # session length, hh:mm
+        "power_max_w": 3500,
+    }
+
+
+def get_v2l_total_kwh() -> float:
+    """All-time total energy DRAWN via V2L (sum of every reconstructed session), in kWh — for the
+    Statistics 'total summary' card. Reconstructed from the positions log (no table), vehicle-scoped."""
+    try:
+        veh, _ = get_vehicle()
+        vid = veh.get("id") if veh else None
+    except Exception:  # noqa: BLE001
+        vid = None
+    wh = get_v2l_sessions(lookback_days=36500, limit=1_000_000, vehicle_id=vid)["total_energy_wh"]
+    return round((wh or 0) / 1000.0, 2)
 
 
 # ── Global map (all tracks + frequent places) ──────────────────────────────────

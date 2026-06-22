@@ -390,7 +390,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
                   <div class="stat-label" style="font-size:10px">{{ t('energy') }}</div>
                   <div style="font-size:16px;font-weight:700;color:#fbbf24">
                     +{{ "%.1f"|format((c.ac_energy_kwh if show_wb else c.energy_added_kwh) or 0) }}<span style="font-size:11px;color:#94a3b8;font-weight:400"> kWh</span>
-                    {% if show_wb %}<span style="font-size:10px;color:#60a5fa;font-weight:400" title="{{ t('wallbox_billed_help') }}"> 🔌 {{ t('wallbox_billed') }}</span>{% endif %}
+                    {% if show_wb %}<span style="font-size:10px;color:#60a5fa;font-weight:400" title="{{ t('wallbox_billed_help') }}"> 🔌 {{ t('wallbox_billed') }}</span>{% else %}<span style="font-size:10px;color:#94a3b8;font-weight:400" title="{{ t('energy_in_battery_help') }}"> 🔋 {{ t('energy_in_battery') }} (DC)</span>{% endif %}
                   </div>
                   {% if show_wb %}
                   <div style="font-size:10px;color:#94a3b8;margin-top:3px" title="{{ t('wallbox_billed_help') }}">

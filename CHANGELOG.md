@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.28.1] — 2026-06-22
+
+### Fixed
+- **Charges now state which energy figure they show.** When Mate has no wallbox reading for a home charge it shows the energy that reached the battery — but that number used to appear with no label, so it could be mistaken for the higher "billed" (grid) amount. Each charge's energy now says what it is: **🔋 In battery (DC)** (what actually entered the battery) or **🔌 wallbox (billed)** (what the wallbox drew from the grid — what you pay). A tooltip on the battery figure explains it is ~10–15% lower than the grid draw, because of AC→DC conversion losses. (Reported by riri19, #80.)
+
 ## [1.28.0] — 2026-06-21
 
 ### Added

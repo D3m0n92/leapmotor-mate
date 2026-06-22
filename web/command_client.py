@@ -861,11 +861,13 @@ def recirc_toggle():
     cur = (_dr.get_latest_status() or {}).get("recirculation")
     return set_recirc(not cur)
 
-# Window position is a 0–100% in the UI, but cmd 230's native range is model-specific: the B10 uses
-# 0–10 (10 = fully open, >10 is silently ignored — confirmed on-car), the T03 0–100 (#62). Map the UI
-# % to the model's native value via its full-open scale. cmd 230 is GLOBAL — all four windows move
-# together (the API has no per-window control). Quick button = 20% vent; slider = 0 (closed) → 100.
-_WINDOWS_SCALE = {"B10": 10}   # car_type → native value for "fully open"; default 100
+# Window position is a 0–100% in the UI, but cmd 230's native range is model-specific: the LEAP-platform
+# cars (B10, C10, B05) use 0–10 (10 = fully open, >10 is silently ignored), while the older T03 uses 0–100
+# (#62). On-car confirmations: B10 (us) and C10 (kerniger / leapmotor-ha — same 0–10, sending 50 or 100 is
+# ignored by the car); B05 shares the B10 platform + pack so it follows the same scale. Map the UI % to the
+# model's native value via its full-open scale. cmd 230 is GLOBAL — all four windows move together (the API
+# has no per-window control). Quick button = 20% vent; slider = 0 (closed) → 100.
+_WINDOWS_SCALE = {"B10": 10, "C10": 10, "B05": 10}   # car_type → native value for "fully open"; default 100 (T03)
 def _session_car_type() -> str:
     v = getattr(_session, "_vehicle", None)
     return (getattr(v, "car_type", "") or "").upper() if v else ""

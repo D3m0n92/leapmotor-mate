@@ -1,6 +1,7 @@
 """Window position % → model-native cmd-230 value (#62). The UI slider is a uniform 0–100%; each
-model has its own native range for cmd 230 — the B10 uses 0–10 (10 = fully open; >10 is ignored,
-confirmed on-car), the T03 0–100. Pure command_client (no fastapi) → runs in CI."""
+model has its own native range for cmd 230 — the LEAP-platform cars (B10, C10, B05) use 0–10 (10 =
+fully open; >10 is ignored, confirmed on-car: B10 by us, C10 by kerniger/leapmotor-ha, B05 follows
+the B10 platform), the older T03 uses 0–100. Pure command_client (no fastapi) → runs in CI."""
 import command_client
 
 
@@ -24,8 +25,15 @@ def test_t03_scale_0_100(monkeypatch):
     assert [_native(monkeypatch, "T03", p) for p in (0, 20, 50, 100)] == ["0", "20", "50", "100"]
 
 
+def test_c10_and_b05_scale_0_10(monkeypatch):
+    # C10 confirmed 0–10 on-car (kerniger / leapmotor-ha); B05 shares the B10 platform → same scale.
+    assert [_native(monkeypatch, "C10", p) for p in (0, 20, 50, 100)] == ["0", "2", "5", "10"]
+    assert [_native(monkeypatch, "B05", p) for p in (0, 20, 50, 100)] == ["0", "2", "5", "10"]
+
+
 def test_unknown_model_defaults_to_0_100(monkeypatch):
-    assert _native(monkeypatch, "C10", 100) == "100"
+    # an unmapped car_type falls back to the 1:1 0–100 range (the T03's native scale).
+    assert _native(monkeypatch, "ZX9", 100) == "100"
 
 
 def test_pct_is_clamped(monkeypatch):

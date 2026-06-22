@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.29.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.29.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -607,7 +607,10 @@ def _wins_pct() -> int:
 # The %-stops a car actually ACTUATES. The B10 ignores everything except these (empirically
 # 0/2/5/10 native = 0/20/50/100% — #62), so its slider snaps to 4 discrete stops; continuous
 # models (T03) get the full 0–100 range. Add a model here as its valid stops are confirmed on-car.
-_WINDOWS_STOPS = {"B10": [0, 20, 50, 100]}
+# C10 = "exactly like the B10" (kerniger / leapmotor-ha disc. #47: native 5 → ~50%, 50/100 ignored);
+# B05 shares the B10 platform → same discrete steps. Mirroring the B10 stops keeps their sliders on
+# the values that move the windows — a continuous slider would let them pick an ignored native (e.g. 3).
+_WINDOWS_STOPS = {"B10": [0, 20, 50, 100], "C10": [0, 20, 50, 100], "B05": [0, 20, 50, 100]}
 def _wins_stops() -> list:
     vehicle, _ = db_reader.get_vehicle()
     ct = ((vehicle or {}).get("car_type") or "").upper()

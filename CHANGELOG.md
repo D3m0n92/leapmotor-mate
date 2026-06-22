@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.29.1] — 2026-06-22
+
+### Fixed
+- **Window remote-control on the C10 and B05.** cmd 230 now maps the uniform 0–100% slider onto their native 0–10 range and snaps to the steps the car actually actuates (0/20/50/100%), matching the B10. The C10 scale was confirmed on-car (thanks @kerniger / leapmotor-ha, discussion #47); the B05 shares the B10 platform and battery pack. Previously both models fell back to the 0–100 default, so any slider or vent value above ~10% was silently ignored by the car.
+
 ## [1.29.0] — 2026-06-22
 
 ### Added

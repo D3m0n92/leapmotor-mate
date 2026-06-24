@@ -110,6 +110,47 @@ def set_setting(key: str, value: str) -> None:
     db.commit()
 
 
+# ── Research / BetaTester mode (MateBetaTesterOnly build) ──────────────────────
+def add_logbook_note(note: str) -> None:
+    """Append a timestamped tester note (e.g. 'engine started to charge while driving')."""
+    import time
+    note = (note or "").strip()
+    if not note:
+        return
+    db = _conn_rw()
+    db.execute("INSERT INTO research_logbook (ts, note) VALUES (?, ?)",
+               (int(time.time() * 1000), note[:2000]))
+    db.commit()
+
+
+def get_logbook(limit: int = 200):
+    """Recent logbook notes, newest first → [{ts, note}]. Empty if the table isn't there yet."""
+    try:
+        rows = _get().execute(
+            "SELECT ts, note FROM research_logbook ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+        return [{"ts": r["ts"], "note": r["note"]} for r in rows]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def count_raw_signals() -> int:
+    """How many raw-signal rows have been captured (shown in the beta UI)."""
+    try:
+        return _get().execute("SELECT COUNT(*) c FROM raw_signals_log").fetchone()["c"]
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def get_raw_signal_rows():
+    """All captured raw-signal rows (ts, sig_key, value), oldest first — for the export."""
+    try:
+        rows = _get().execute(
+            "SELECT ts, sig_key, value FROM raw_signals_log ORDER BY ts ASC").fetchall()
+        return [(r["ts"], r["sig_key"], r["value"]) for r in rows]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def get_db_size_bytes() -> int:
     """Total on-disk size of the SQLite DB (main file + WAL/SHM sidecars)."""
     total = 0

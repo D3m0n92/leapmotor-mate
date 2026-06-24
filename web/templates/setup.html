@@ -115,6 +115,7 @@
     <input type="hidden" name="language"  id="lang-input"  value="en">
     <input type="hidden" name="battery"   id="h-battery"   value="">
     <input type="hidden" name="car_type"  id="h-car-type"  value="">
+    <input type="hidden" name="is_reev"   id="h-is-reev"   value="0">
     <input type="hidden" name="vin"       id="h-vin"       value="">
 
     {% if error %}
@@ -202,10 +203,12 @@ const BATTERY_OPTIONS = {
   C10: [
     { v: "69.9", label: "69.9 kWh — RWD" },
     { v: "81.9", label: "81.9 kWh — AWD" },
+    { v: "28.4", label: "28.4 kWh — REEV (range-extender)", reev: true },
   ],
   B10: [
     { v: "56.2", label: "56.2 kWh — Pro · 361 km WLTP" },
     { v: "67.1", label: "67.1 kWh — Pro Max · 434 km WLTP" },
+    { v: "18.8", label: "18.8 kWh — REEV (range-extender)", reev: true },
   ],
 };
 
@@ -542,8 +545,9 @@ function waitForRestart(msg, wantDemo) {
 }
 
 // ── Battery selector ──────────────────────────────────────────────────────────
-function selectBattery(v) {
+function selectBattery(v, reev) {
   document.getElementById('h-battery').value = v;
+  document.getElementById('h-is-reev').value = reev ? '1' : '0';
   document.querySelectorAll('.bat-opt').forEach(el => {
     const sel = el.dataset.v === v;
     el.style.background   = sel ? '#14b8a622' : '#1e293b';
@@ -561,7 +565,7 @@ function buildBatterySelector(options) {
   options.forEach(opt => {
     html += `
       <div class="bat-opt" data-v="${opt.v}"
-           onclick="selectBattery('${opt.v}')"
+           onclick="selectBattery('${opt.v}', ${opt.reev ? 'true' : 'false'})"
            style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;
                   border:1px solid #334155;background:#1e293b;cursor:pointer;transition:all .15s">
         <div class="bat-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid #475569;

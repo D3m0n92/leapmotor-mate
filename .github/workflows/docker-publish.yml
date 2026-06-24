@@ -76,6 +76,34 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # MateBetaTesterOnly: SAME source, built with MATE_RESEARCH=1 → full-signal capture on.
+      # Published as a rolling `:beta` tag (+ `:beta-<sha>` for traceability). The official tags
+      # above are built flag-off, so normal users are never on the research build.
+      - name: Beta image metadata (tags + labels)
+        id: meta-beta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            name=docker.io/${{ env.DOCKERHUB_USERNAME }}/leapmotor-mate,enable=${{ env.DOCKERHUB_USERNAME != '' }}
+          tags: |
+            type=raw,value=beta
+            type=sha,prefix=beta-,format=short
+
+      - name: Build and push BETA (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            MATE_RESEARCH=1
+          tags: ${{ steps.meta-beta.outputs.tags }}
+          labels: ${{ steps.meta-beta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       # Keeps the Docker Hub repo page (short description + overview) in sync with
       # docs/DOCKERHUB.md — the full README is bilingual and over Docker Hub's 25 KB limit.
       - name: Sync Docker Hub description

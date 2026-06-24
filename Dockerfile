@@ -28,6 +28,12 @@ ENV PYTHONUNBUFFERED=1
 ENV CERT_DIR=/app/certs
 ENV DB_PATH=/data/leapmotor_mate.db
 
+# MateBetaTesterOnly flag. 0 in the official image (the research code stays inert); the CI
+# (docker-publish.yml) builds a second ":beta" image with --build-arg MATE_RESEARCH=1, which
+# turns on full-signal capture + the encrypted research export. Inherited by poller + web.
+ARG MATE_RESEARCH=0
+ENV MATE_RESEARCH=${MATE_RESEARCH}
+
 # Declare the web port so Docker Desktop's "Run" pre-fills the port mapping. Without
 # this the Run dialog shows "No ports exposed in this image" and the user can't reach
 # the UI (a frequent first-run dead end).

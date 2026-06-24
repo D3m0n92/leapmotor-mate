@@ -331,6 +331,12 @@ def _cert_path(filename: str, env_key: str) -> str:
     return str(_PROJECT_ROOT / "certs" / filename)
 
 
+def _research_enabled() -> bool:
+    """True only in the MateBetaTesterOnly build (MATE_RESEARCH baked into that image).
+    Off in the normal build → the full-signal capture below is a complete no-op."""
+    return os.environ.get("MATE_RESEARCH", "") not in ("", "0", "false", "False", "no")
+
+
 def main():
     db_path = os.environ.get("DB_PATH", "leapmotor_mate.db")
     log.info("Starting LeapMotor Mate poller")
@@ -446,6 +452,7 @@ def main():
     mqtt_service = None   # optional MQTT → HA bridge, created lazily when enabled
     empty_status_count = 0  # consecutive "no live signals" responses (car asleep)
     poll_error_count   = 0  # consecutive hard API errors (cloud unreachable) — for quiet logging
+    _research_last_sig: dict = {}   # research/beta mode: last value per signal id, for delta logging
 
     while True:
         try:
@@ -475,6 +482,24 @@ def main():
                 data = client.get_status()
             recorder.process(data)
             _write_comfort_state(db, data)
+
+            # A REEV reports a fuel tank (signal 3235) → flag it once, so the dedicated REEV
+            # page/nav appears even for a car that was onboarded before the variant existed
+            # (no re-setup needed). Write-once guard → no per-poll DB churn.
+            if data.is_reev and db.get_setting("is_reev", "0") != "1":
+                db.set_setting("is_reev", "1")
+                log.info("REEV detected (fuel signal 3235 present) — enabling REEV view")
+
+            # Research / BetaTester full-signal capture (MateBetaTesterOnly build only). Logs every
+            # raw signal that CHANGED value since the last poll → a complete, timestamped history we
+            # can later correlate with the tester's logbook to map REEV signals. No-op otherwise.
+            if _research_enabled() and data.raw_signals:
+                changed = {k: v for k, v in data.raw_signals.items()
+                           if str(v) != _research_last_sig.get(k)}
+                if changed:
+                    db.insert_raw_signal_changes(
+                        vehicle_id, data.timestamp_ms or int(time.time() * 1000), changed)
+                    _research_last_sig.update({k: str(v) for k, v in changed.items()})
 
             # Persist the authoritative GPS sign the moment a signed poll refreshes it (#43),
             # so the next restart starts on dry land. Only writes when it actually changes
@@ -585,11 +610,16 @@ def main():
         except Exception:  # noqa: BLE001
             pass
 
-        # Daily DB pruning — opt-in via Settings (positions_retention_days; 0 = keep forever)
+        # Daily DB pruning (at most once/day). positions: opt-in via Settings
+        # (positions_retention_days; 0 = keep forever). raw_signals_log (beta capture):
+        # its own retention, default 30d, so the full-signal log can't grow unbounded.
         try:
-            ret = int(db.get_setting("positions_retention_days", "0") or 0)
-            if ret > 0 and time.time() - float(db.get_setting("last_prune_ts", "0") or 0) > 86400:
-                db.prune_positions(ret)
+            if time.time() - float(db.get_setting("last_prune_ts", "0") or 0) > 86400:
+                ret = int(db.get_setting("positions_retention_days", "0") or 0)
+                if ret > 0:
+                    db.prune_positions(ret)
+                if _research_enabled():
+                    db.prune_raw_signals(int(db.get_setting("research_retention_days", "30") or 30))
                 db.set_setting("last_prune_ts", str(time.time()))
         except Exception as exc:  # noqa: BLE001
             log.warning("DB prune skipped: %s", exc)

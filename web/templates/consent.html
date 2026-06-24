@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="{{ request.headers.get('x-ingress-path', '') }}/">
+  <title>{{ t('consent_title') }} — LeapMotor Mate</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+           min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { max-width:560px; width:100%; background:#1e293b; border:1px solid #334155; border-radius:16px;
+            padding:28px 26px; box-shadow:0 10px 40px rgba(0,0,0,.4); }
+    .badge { display:inline-block; background:#7c3aed; color:#fff; font-size:11px; font-weight:700;
+             letter-spacing:.08em; text-transform:uppercase; padding:5px 10px; border-radius:999px; margin-bottom:14px; }
+    h1 { font-size:1.35rem; margin:0 0 14px; color:#fff; }
+    p { font-size:.92rem; line-height:1.6; color:#cbd5e1; margin:0 0 22px; }
+    button { width:100%; background:#7c3aed; color:#fff; border:0; border-radius:12px; padding:14px;
+             font-size:.95rem; font-weight:700; cursor:pointer; transition:background .15s; }
+    button:hover { background:#6d28d9; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">🔬 BETA TESTER</span>
+    <h1>{{ t('consent_title') }}</h1>
+    <p>{{ t('consent_body') }}</p>
+    <form method="post" action="research/consent">
+      <button type="submit">{{ t('consent_accept') }}</button>
+    </form>
+  </div>
+</body>
+</html>

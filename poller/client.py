@@ -47,6 +47,8 @@ class VehicleData:
     remaining_charge_min: int # minutes to full (signal 1200), 0 when not charging
     charge_voltage_v: float   # charging voltage (signal 1177)
     charge_current_a: float   # charging current (signal 1178)
+    is_reev: bool = False     # car reports a fuel tank (signal 3235) → range-extender model
+    raw_signals: dict = None  # full raw signal dict — attached in research/beta mode for full-PID logging
     # Individual doors / windows / tyres — used by the optional MQTT → HA bridge
     door_driver_open: bool = False
     door_passenger_open: bool = False
@@ -207,6 +209,7 @@ class LeapmotorMateClient:
         if _soc_raw is None or (float(_soc_raw or 0) == 0 and float(sig.get("3260") or 0) > 5):
             raise EmptyStatusError("vehicle status carries no usable SoC (partial/glitch read)")
         vd = _parse_signal(self._vehicle.vin, sig)
+        vd.raw_signals = sig   # full dict for research-mode full-PID logging (ignored in normal builds)
         # The configured charge limit (max-charge SoC) lives in the config block of this SAME raw
         # status — not in the signal dict — so capture it here, free of any extra cloud call, for
         # the Overview's "to X%" charge-ETA label instead of a hardcoded 100. It's the very field
@@ -467,6 +470,7 @@ def _parse_signal(vin: str, sig: dict) -> VehicleData:
         timestamp_ms=int(sig.get("sts") or sig.get("1") or 0),
         soc=float(sig.get("100003") or sig.get("1204") or 0),
         range_km=float(sig.get("3260") or 0),
+        is_reev=(sig.get("3235") is not None),   # fuel level present → range-extender variant
         odometer_km=float(sig.get("1318") or 0),
         speed_kmh=speed_kmh,
         gear=gear,

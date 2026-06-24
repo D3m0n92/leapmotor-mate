@@ -161,6 +161,24 @@ CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle ON maintenance_logs(vehicle_i
 -- filter charging=1 and range/scan recorded_at; a small partial index keeps them
 -- fast as `positions` grows to millions of rows (~8% of rows are charging=1).
 CREATE INDEX IF NOT EXISTS idx_positions_charging_recorded ON positions(recorded_at) WHERE charging = 1;
+
+-- Research / BetaTester mode only (MateBetaTesterOnly build). Full raw-signal history (delta:
+-- one row per signal that changed value), plus the tester's logbook. Empty/unused in the
+-- normal build. Pruned by retention so it can't grow unbounded.
+CREATE TABLE IF NOT EXISTS raw_signals_log (
+    id          INTEGER PRIMARY KEY,
+    vehicle_id  INTEGER,
+    ts          INTEGER NOT NULL,   -- epoch ms (signal timestamp)
+    sig_key     TEXT NOT NULL,      -- raw Leapmotor signal id, e.g. "3235"
+    value       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_raw_signals_ts ON raw_signals_log(ts);
+
+CREATE TABLE IF NOT EXISTS research_logbook (
+    id          INTEGER PRIMARY KEY,
+    ts          INTEGER NOT NULL,   -- epoch ms the note was added
+    note        TEXT NOT NULL       -- e.g. "engine started to charge while driving", "refueled to 100%"
+);
 """
 
 # self.get_battery_capacity() is now stored in settings table, not hardcoded
@@ -601,6 +619,32 @@ class Database:
             log.info("Pruned %d old positions rows (retention %dd) and reclaimed space",
                      deleted, retention_days)
         return deleted
+
+    # ── Research / BetaTester mode (MateBetaTesterOnly build) ──────────────────
+    def insert_raw_signal_changes(self, vehicle_id, ts_ms: int, changed: dict) -> int:
+        """Append the raw signals that CHANGED value this poll (delta logging — lean, and
+        it pins the exact moment each signal moved, which is what we correlate against the
+        tester's logbook). `changed` = {sig_key: value}. Returns rows inserted."""
+        if not changed:
+            return 0
+        rows = [(vehicle_id, int(ts_ms), str(k), None if v is None else str(v))
+                for k, v in changed.items()]
+        self._conn.executemany(
+            "INSERT INTO raw_signals_log (vehicle_id, ts, sig_key, value) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        self._conn.commit()
+        return len(rows)
+
+    def prune_raw_signals(self, retention_days: int) -> int:
+        """Drop raw-signal rows older than retention_days (0 = keep forever) so the beta
+        capture can't grow unbounded. Returns rows deleted."""
+        if not retention_days or retention_days <= 0:
+            return 0
+        cutoff_ms = int((datetime.now(timezone.utc) - timedelta(days=retention_days)).timestamp() * 1000)
+        cur = self._conn.execute("DELETE FROM raw_signals_log WHERE ts < ?", (cutoff_ms,))
+        self._conn.commit()
+        return cur.rowcount or 0
 
     def get_or_create_device_id(self) -> str:
         """One stable device_id for this Mate install, shared by poller and web.

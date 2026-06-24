@@ -3,6 +3,12 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.33.0] — 2026-06-24
+
+### Added
+- **REEV (range-extender) support — first step.** Setup now offers the **REEV battery variants for the B10 and C10** (the T03 has no REEV), and a new dedicated **REEV** page surfaces the fuel sensors — **fuel level, fuel range and combined battery+fuel range** — for range-extender cars. The page appears automatically on a REEV (detected from the car's fuel signal) and stays hidden on full-electric cars. It is **read-only for now**: REEV data is not yet woven into trips, charges or statistics — that follows once the behaviour is validated on real vehicles. Mapping based on the community work in kerniger/leapmotor-ha#46.
+- **Separate MateBetaTesterOnly build (opt-in).** A distinct beta image/repository, kept in lockstep with this one from the same source, captures the full raw-signal history + a tester logbook and exports an **encrypted** bundle — so we can decode REEV behaviour and ship full REEV support in a future release. The normal build is completely unaffected (the research code is inert unless explicitly enabled).
+
 ## [1.32.1] — 2026-06-24
 
 ### Fixed

@@ -25,11 +25,12 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.32.1"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.33.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
 import maintenance
+import research
 
 _IS_DEMO = demo.is_demo()
 demo.install(command_client, ha_client)   # no-op unless MATE_DEMO is set
@@ -138,6 +139,10 @@ async def setup_check(request: Request, call_next):
     if not db_reader.is_setup_complete():
         # Honor the HA ingress path so the redirect stays inside the add-on panel
         return RedirectResponse(request.headers.get("x-ingress-path", "") + "/setup")
+    # BetaTester consent gate (research build only): one-time acknowledgement before any page.
+    if research.research_enabled() and db_reader.get_setting("research_consent", "0") != "1" \
+            and not path.startswith("/research/consent"):
+        return RedirectResponse(request.headers.get("x-ingress-path", "") + "/research/consent")
     return await call_next(request)
 
 
@@ -206,6 +211,8 @@ def _ctx(**kwargs):
     return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION, "demo": _IS_DEMO,
             "update": update_check.get_update_status(MATE_VERSION),
             "wallbox_enabled": wallbox_enabled,
+            "is_reev": db_reader.get_setting("is_reev", "0") == "1",
+            "research": research.research_enabled(),
             "wb_active_profile_name": wb_active_profile_name,
             "wb_active_profile_id":   wb_active_profile_id,
             "currency": db_reader.get_currency(), "auth_enabled": auth.enabled(),
@@ -467,6 +474,111 @@ async def battery_page(request: Request):
     return templates.TemplateResponse(request, "battery.html", _ctx(
         page="battery", vehicle=vehicle, health=health, vampire=vampire,
     ))
+
+
+@app.get("/reev", response_class=HTMLResponse)
+async def reev_page(request: Request):
+    """Dedicated, isolated REEV (range-extender) view. BETA / data-collection: it surfaces the
+    raw fuel signals we currently know (mapped from a real B10 REEV in kerniger/leapmotor-ha#46)
+    WITHOUT plumbing them into trips/charges/stats yet — those get touched only once the
+    behaviour is validated against real REEV data. Live signal fetch (no pipeline storage)."""
+    import asyncio
+    vehicle, _ = db_reader.get_vehicle()
+    signals = await asyncio.get_event_loop().run_in_executor(None, command_client.get_fresh_signals)
+    sig = signals or {}
+
+    def f(key):
+        v = sig.get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    reev = {
+        "has_fuel":          sig.get("3235") is not None,   # the REEV marker
+        "fuel_level_pct":    f("3235"),                     # fuel tank level %
+        "fuel_range_km":     f("3259"),                     # range on fuel
+        "combined_range_km": f("3261"),                     # battery + fuel
+        "battery_range_km":  f("3260"),                     # EV-only range (also Mate's range_km)
+        "range_mode":        f("3262"),                     # 1 on BEV; may vary on REEV
+    }
+    return templates.TemplateResponse(request, "reev.html", _ctx(
+        page="reev", vehicle=vehicle, reev=reev, signals_ok=bool(signals),
+        logbook_html=_logbook_list_html() if research.research_enabled() else "",
+        raw_count=db_reader.count_raw_signals() if research.research_enabled() else 0,
+    ))
+
+
+def _logbook_list_html() -> str:
+    """Render the logbook entries (newest first) as the HTMX-swapped list."""
+    import datetime as _dt
+    notes = db_reader.get_logbook()
+    if not notes:
+        return '<div class="text-xs text-slate-500">—</div>'
+    out = []
+    for n in notes:
+        ts = _dt.datetime.fromtimestamp(n["ts"] / 1000).strftime("%Y-%m-%d %H:%M")
+        note = (n["note"] or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        out.append(f'<div class="flex gap-2 text-xs border-b border-slate-800 py-1.5">'
+                   f'<span class="text-slate-500 font-mono flex-shrink-0">{ts}</span>'
+                   f'<span class="text-slate-200">{note}</span></div>')
+    return "".join(out)
+
+
+@app.post("/api/research/logbook", response_class=HTMLResponse)
+async def research_logbook_add(request: Request):
+    """BetaTester only: add a timestamped logbook note, return the refreshed list."""
+    if not research.research_enabled():
+        return Response(status_code=404)
+    form = await request.form()
+    db_reader.add_logbook_note(form.get("note", ""))
+    return HTMLResponse(_logbook_list_html())
+
+
+@app.get("/api/research/export")
+async def research_export():
+    """BetaTester only: build an ENCRYPTED bundle (redacted raw-signal history + logbook) for the
+    tester to attach to a beta issue. GPS is stripped; the bundle is sealed to our public key so
+    only the maintainer's private key can open it."""
+    if not research.research_enabled():
+        return Response(status_code=404)
+    import csv, io, json, time, zipfile
+    rows = research.redact_signal_rows(db_reader.get_raw_signal_rows())
+    logbook = db_reader.get_logbook(limit=1000000)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        s = io.StringIO(); w = csv.writer(s)
+        w.writerow(["ts_ms", "sig_key", "value"]); w.writerows(rows)
+        z.writestr("raw_signals_log.csv", s.getvalue())
+        s = io.StringIO(); w = csv.writer(s)
+        w.writerow(["ts_ms", "note"]); w.writerows([(n["ts"], n["note"]) for n in logbook])
+        z.writestr("logbook.csv", s.getvalue())
+        z.writestr("meta.json", json.dumps({
+            "mate_version": MATE_VERSION,
+            "car_type": (db_reader.get_vehicle()[0] or {}).get("car_type"),
+            "is_reev": db_reader.get_setting("is_reev", "0"),
+            "signal_rows": len(rows), "logbook_notes": len(logbook),
+            "redacted_signals": sorted(research.REDACT_SIGNALS),
+        }, indent=2))
+    encrypted = research.encrypt_bundle(buf.getvalue())
+    fname = f"mate-beta-bundle-{int(time.time())}.matebeta"
+    return Response(encrypted, media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@app.get("/research/consent", response_class=HTMLResponse)
+async def research_consent_page(request: Request):
+    """One-time BetaTester consent gate (research build only)."""
+    if not research.research_enabled():
+        return RedirectResponse(request.headers.get("x-ingress-path", "") + "/")
+    lang = db_reader.get_language()
+    return templates.TemplateResponse(request, "consent.html", {"request": request, "t": i18n.get_t(lang)})
+
+
+@app.post("/research/consent")
+async def research_consent_accept(request: Request):
+    db_reader.set_setting("research_consent", "1")
+    return RedirectResponse(request.headers.get("x-ingress-path", "") + "/", status_code=303)
 
 
 def _maint_ctx(request: Request):
@@ -2877,10 +2989,12 @@ _EU_BATTERY_MAP: dict[str, list[dict]] = {
     "C10": [
         {"v": "69.9", "label": "69.9 kWh usable — RWD"},
         {"v": "81.9", "label": "81.9 kWh usable — AWD"},
+        {"v": "28.4", "label": "28.4 kWh — REEV (range-extender)", "reev": True},
     ],
     "B10": [
         {"v": "55.0", "label": "55.0 kWh usable — Pro · 361 km WLTP"},
         {"v": "65.0", "label": "65.0 kWh usable — Pro Max · 434 km WLTP"},
+        {"v": "18.8", "label": "18.8 kWh — REEV (range-extender)", "reev": True},
     ],
     "B05": [
         {"v": "55.0", "label": "55.0 kWh usable — Pro · 401 km WLTP"},
@@ -3013,6 +3127,7 @@ async def setup_submit(request: Request):
     battery  = (form.get("battery", "65.0") or "65.0").strip()
     lang     = form.get("language", "en")
     car_type = (form.get("car_type", "") or "").strip().upper()
+    is_reev  = "1" if form.get("is_reev") in ("1", "on", "true") else "0"
     vin      = (form.get("vin", "") or "").strip()
 
     if not user or not pwd or not pin:
@@ -3036,6 +3151,7 @@ async def setup_submit(request: Request):
     db_reader.set_secret("leapmotor_pass", pwd)
     db_reader.set_secret("leapmotor_pin", pin)
     db_reader.set_setting("battery_capacity_kwh", str(battery_kwh))
+    db_reader.set_setting("is_reev", is_reev)   # REEV variant selected in the wizard → gates fuel features
     db_reader.set_setting("language", lang if lang in ("en", "it", "fr", "de", "pl") else "en")
 
     # Pre-populate vehicles table so the UI shows model info before the first poller run

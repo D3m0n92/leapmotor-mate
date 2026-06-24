@@ -190,9 +190,24 @@ def _ctx(**kwargs):
         if pos.get("plug_connected"):
             return t("state_charge_complete") if pos.get("charge_completed") else t("state_plugged")
         return t("state_parked")
+    wallbox_enabled = db_reader.get_setting("wallbox_enabled", "0") == "1"
+    # Active wallbox profile: shown in sidebar + page title + profiles panel.
+    # Only resolved when wallbox is on AND a profile has been loaded.
+    wb_active_profile_name = None
+    wb_active_profile_id   = None
+    if wallbox_enabled:
+        _pid = db_reader.get_setting("wallbox_active_profile", "")
+        if _pid:
+            _profiles = _get_wallbox_profiles()
+            _match = next((p for p in _profiles if p["id"] == _pid), None)
+            if _match:
+                wb_active_profile_name = _match["name"]
+                wb_active_profile_id   = _pid
     return {**kwargs, "lang": lang, "t": t, "version": MATE_VERSION, "demo": _IS_DEMO,
             "update": update_check.get_update_status(MATE_VERSION),
-            "wallbox_enabled": db_reader.get_setting("wallbox_enabled", "0") == "1",
+            "wallbox_enabled": wallbox_enabled,
+            "wb_active_profile_name": wb_active_profile_name,
+            "wb_active_profile_id":   wb_active_profile_id,
             "currency": db_reader.get_currency(), "auth_enabled": auth.enabled(),
             "soc_color": _soc_color, "state_label": state_label, "state_color": _state_color,
             "is_driving": _driving, "fmt_dur": _fmt_dur}
@@ -964,6 +979,7 @@ async def save_ha(request: Request):
         db_reader.set_setting("ha_url", (form.get("ha_url") or "").strip())
     if form.get("ha_token"):  # don't wipe a saved token on an empty submit
         db_reader.set_secret("ha_token", form.get("ha_token").strip())
+    db_reader.set_setting("wallbox_active_profile", "")  # settings edited directly → stale
     return HTMLResponse(_ha_test_html())
 
 
@@ -1024,6 +1040,7 @@ async def save_wallbox_entities(request: Request):
     mapping = {role: form.get(role, "").strip()
                for role in ha_client.WB_ROLES if form.get(role, "").strip()}
     db_reader.set_setting("wallbox_entities", json.dumps(mapping))
+    db_reader.set_setting("wallbox_active_profile", "")  # settings edited directly → stale
     t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("wallbox_saved")}</span>')
 
@@ -1034,6 +1051,7 @@ async def save_wallbox_keywords(request: Request):
     form = await request.form()
     keywords = (form.get("wb_keywords", "") or "").strip()
     db_reader.set_setting("wb_keywords", keywords)
+    db_reader.set_setting("wallbox_active_profile", "")  # settings edited directly → stale
     t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("wallbox_saved")}</span>')
 
@@ -1050,6 +1068,124 @@ async def save_wallbox_auto_home(request: Request):
     t = i18n.get_t(db_reader.get_language())
     msg = t("wallbox_saved") + (" · " + t("wallbox_auto_home_applied").format(n=n) if n else "")
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{msg}</span>')
+
+
+# ── Wallbox saved profiles ───────────────────────────────────────────────────
+
+def _get_wallbox_profiles() -> list:
+    raw = db_reader.get_setting("wallbox_profiles", "[]")
+    try:
+        profiles = json.loads(raw)
+        if not isinstance(profiles, list):
+            return []
+        return profiles
+    except (ValueError, TypeError):
+        return []
+
+
+def _set_wallbox_profiles(profiles: list) -> None:
+    db_reader.set_setting("wallbox_profiles", json.dumps(profiles, separators=(",", ":")))
+
+
+@app.get("/api/settings/wallbox-profiles", response_class=HTMLResponse)
+async def wallbox_profiles_list(request: Request):
+    """Lazy-load the profiles picker panel (embedded in the wallbox settings card)."""
+    return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+        profiles=_get_wallbox_profiles(), wb_profile_error=None,
+    ))
+
+
+@app.post("/api/settings/wallbox-profiles/save", response_class=HTMLResponse)
+async def wallbox_profile_save(request: Request):
+    """Snapshot the active wallbox settings (HA URL, token, keywords, entity mapping,
+    energy prices and wallbox flags) under a user-chosen name so it can be restored
+    later with one click."""
+    import uuid
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    t = i18n.get_t(db_reader.get_language())
+    profiles = _get_wallbox_profiles()
+    if not name:
+        return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+            profiles=profiles,
+            wb_profile_error=t("wb_profile_name_required"),
+        ))
+    if any(p["name"].strip().lower() == name.lower() for p in profiles):
+        return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+            profiles=profiles,
+            wb_profile_error=t("wb_profile_name_taken"),
+        ))
+    prices = db_reader.get_charge_prices()
+    profiles.append({
+        "id": uuid.uuid4().hex[:8],
+        "name": name,
+        "ha_url":            db_reader.get_setting("ha_url", ""),
+        "ha_token":          db_reader.get_setting("ha_token", ""),   # stored encrypted
+        "wb_keywords":       db_reader.get_setting("wb_keywords", ""),
+        "wallbox_entities":  db_reader.get_setting("wallbox_entities", ""),
+        "wallbox_enabled":   db_reader.get_setting("wallbox_enabled", "0"),
+        "wallbox_auto_home": db_reader.get_setting("wallbox_auto_home", "0"),
+        "price_home_kwh":    prices.get("price_home_kwh"),
+        "price_ac_kwh":      prices.get("price_ac_kwh"),
+        "price_fast_kwh":    prices.get("price_fast_kwh"),
+        "price_hpc_kwh":     prices.get("price_hpc_kwh"),
+    })
+    _set_wallbox_profiles(profiles)
+    new_id = profiles[-1]["id"]
+    db_reader.set_setting("wallbox_active_profile", new_id)
+    return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+        profiles=profiles, wb_profile_error=None,
+    ))
+
+
+@app.post("/api/settings/wallbox-profiles/{profile_id}/load", response_class=HTMLResponse)
+async def wallbox_profile_load(request: Request, profile_id: str):
+    """Restore a saved wallbox profile as the active configuration and reload the page."""
+    t = i18n.get_t(db_reader.get_language())
+    profiles = _get_wallbox_profiles()
+    # Guard: refuse to switch while a charge is active (switching mid-charge would blend
+    # two physical wallboxes into the same session's energy counter).
+    status = db_reader.get_latest_status()
+    if status and status.get("charging"):
+        return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+            profiles=profiles,
+            wb_profile_error=t("wb_profile_charging_blocked"),
+        ))
+    profile = next((p for p in profiles if p["id"] == profile_id), None)
+    if profile is None:
+        return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+            profiles=profiles,
+            wb_profile_error=t("wb_profile_not_found"),
+        ))
+    db_reader.set_setting("ha_url", profile.get("ha_url", ""))
+    if profile.get("ha_token"):
+        db_reader.set_setting("ha_token", profile["ha_token"])  # already encrypted
+    db_reader.set_setting("wb_keywords", profile.get("wb_keywords", ""))
+    db_reader.set_setting("wallbox_entities", profile.get("wallbox_entities", ""))
+    db_reader.set_setting("wallbox_enabled", profile.get("wallbox_enabled", "0"))
+    db_reader.set_setting("wallbox_auto_home", profile.get("wallbox_auto_home", "0"))
+    for price_key in ("price_home_kwh", "price_ac_kwh", "price_fast_kwh", "price_hpc_kwh"):
+        val = profile.get(price_key)
+        if val is not None:
+            try:
+                db_reader.update_charge_price(price_key, float(val))
+            except (ValueError, TypeError):
+                pass
+    db_reader.set_setting("wallbox_active_profile", profile_id)
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+
+@app.post("/api/settings/wallbox-profiles/{profile_id}/delete", response_class=HTMLResponse)
+async def wallbox_profile_delete(request: Request, profile_id: str):
+    """Remove a saved wallbox profile (irreversible). Clears the active-profile
+    indicator if the deleted one was the one currently in use."""
+    profiles = [p for p in _get_wallbox_profiles() if p["id"] != profile_id]
+    _set_wallbox_profiles(profiles)
+    if db_reader.get_setting("wallbox_active_profile", "") == profile_id:
+        db_reader.set_setting("wallbox_active_profile", "")
+    return templates.TemplateResponse(request, "partials/wallbox_profiles.html", _ctx(
+        profiles=profiles, wb_profile_error=None,
+    ))
 
 
 @app.get("/api/wallbox/live", response_class=HTMLResponse)
@@ -1345,6 +1481,25 @@ async def save_prices(request: Request):
                 db_reader.update_charge_price(key, float(val))
             except ValueError:
                 pass
+    # If a profile is active, keep the indicator and sync the new prices into its snapshot
+    # so that reloading the profile later restores the updated values.
+    active_id = db_reader.get_setting("wallbox_active_profile", "")
+    if active_id:
+        profiles = _get_wallbox_profiles()
+        updated = False
+        for p in profiles:
+            if p["id"] == active_id:
+                for price_key in ("price_home_kwh", "price_ac_kwh", "price_fast_kwh", "price_hpc_kwh"):
+                    val = form.get(price_key)
+                    if val:
+                        try:
+                            p[price_key] = float(val)
+                            updated = True
+                        except ValueError:
+                            pass
+                break
+        if updated:
+            _set_wallbox_profiles(profiles)
     t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
 

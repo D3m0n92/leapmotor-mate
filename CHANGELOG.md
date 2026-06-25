@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.33.1] — 2026-06-25
+
+### Fixed
+- **Windows slider no longer shows a stale opening % when the windows are closed.** The B10 can't report its exact window position, so the slider shows the last commanded %; if the windows were then closed via the official app, physically, or the toggle, it could sit at e.g. 100% while the state badge correctly read "Closed". The slider (and its % label) now snap to **0%** whenever the windows are reported closed, matching the badge; open/unknown states are unchanged. The other sliders were audited and are not affected (climate temperature/fan read live signals; seat heating/ventilation track the polled state; settings sliders are configuration values).
+
 ## [1.33.0] — 2026-06-24
 
 ### Added

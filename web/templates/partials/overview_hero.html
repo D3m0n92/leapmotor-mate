@@ -44,32 +44,39 @@
   <!-- Image + overlaid status -->
   <div class="relative flex-1 flex items-center justify-center min-h-[12rem]">
 
-    {# Left-side status chips (stacked): same safety code as the command buttons — amber = attention
-       (windows open), red = alert (trunk open), green = safe (closed). #}
-    <div class="absolute left-0 top-0 flex flex-col items-start gap-1.5">
-      {% if wins is not none %}
-      <span class="hero-chip
-        {% if wins %}bg-amber-400/10 text-amber-400 border border-amber-400/30
-        {% else %}bg-green-400/10 text-green-400 border border-green-400/30{% endif %}">
-        {{ ico.mdi('car-side', 'w-4 h-4') }}
-        {% if wins %}{{ t('hero_windows_open') }}{% if status.windows_open_count %}<span class="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">{{ status.windows_open_count }}</span>{% endif %}{% else %}{{ t('hero_windows_closed') }}{% endif %}
-      </span>
-      {% endif %}
-      {% if trunk %}
-      <span class="hero-chip bg-red-400/10 text-red-400 border border-red-400/30">
-        {{ ico.mdi('car-back', 'w-4 h-4') }} {{ t('hero_trunk_open') }}
+    {# Status chips overlaid at the TOP of the car image. ONE absolute flex-wrap row spanning the
+       width: the windows/trunk group justifies to the left and the doors chip to the right at normal
+       widths, but they WRAP onto stacked lines (never overlap) when the hero card is narrow — the lg
+       3-column layout (~190px) or an iPad inside HA's ingress iframe. Self-adapts to any translation
+       length, so there's no px breakpoint to maintain (FR/DE/PL labels are longer than IT).
+       Safety code mirrors the command buttons: amber = attention (windows open), red = alert (trunk
+       open / doors unlocked), green = safe (closed / locked). #}
+    <div class="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-1">
+      <div class="flex flex-col items-start gap-1.5 min-w-0 max-w-full">
+        {% if wins is not none %}
+        <span class="hero-chip max-w-full min-w-0 break-words
+          {% if wins %}bg-amber-400/10 text-amber-400 border border-amber-400/30
+          {% else %}bg-green-400/10 text-green-400 border border-green-400/30{% endif %}">
+          {{ ico.mdi('car-side', 'w-4 h-4 shrink-0') }}
+          {% if wins %}{{ t('hero_windows_open') }}{% if status.windows_open_count %}<span class="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none shrink-0">{{ status.windows_open_count }}</span>{% endif %}{% else %}{{ t('hero_windows_closed') }}{% endif %}
+        </span>
+        {% endif %}
+        {% if trunk %}
+        <span class="hero-chip max-w-full min-w-0 break-words bg-red-400/10 text-red-400 border border-red-400/30">
+          {{ ico.mdi('car-back', 'w-4 h-4 shrink-0') }} {{ t('hero_trunk_open') }}
+        </span>
+        {% endif %}
+      </div>
+
+      {% if locked is not none %}
+      <span class="hero-chip max-w-full min-w-0 break-words
+        {% if locked %}bg-green-400/10 text-green-400 border border-green-400/30
+        {% else %}bg-red-400/10 text-red-400 border border-red-400/30{% endif %}">
+        {{ ico.mdi('shield-car', 'w-4 h-4 shrink-0') }}
+        {% if locked %}{{ t('hero_doors_locked') }}{% else %}{{ t('hero_doors_unlocked') }}{% endif %}
       </span>
       {% endif %}
     </div>
-
-    {% if locked is not none %}
-    <span class="hero-chip absolute right-0 top-0
-      {% if locked %}bg-green-400/10 text-green-400 border border-green-400/30
-      {% else %}bg-red-400/10 text-red-400 border border-red-400/30{% endif %}">
-      {{ ico.mdi('shield-car', 'w-4 h-4') }}
-      {% if locked %}{{ t('hero_doors_locked') }}{% else %}{{ t('hero_doors_unlocked') }}{% endif %}
-    </span>
-    {% endif %}
 
     {# Cache-bust the composed car image by the body state that affects it, so the browser re-fetches
        when (and only when) the picture actually changes — the htmx swap alone keeps the same <img>

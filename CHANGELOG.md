@@ -3,6 +3,12 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.33.2] — 2026-06-27
+
+### Fixed
+- **Sidebar no longer gets stuck visible at narrow widths after opening the mobile menu.** The off-canvas hide below the `md` breakpoint relied on a Tailwind utility class that the menu toggle itself stripped, and nothing reset the drawer when the viewport crossed the breakpoint — so opening the menu and then resizing could leave the sidebar wrongly showing at narrow widths (it would "reappear" at some resolutions). Open/close now uses a dedicated state class (the hide stays owned purely by CSS) and resets when entering desktop width.
+- **Overview hero card: the "doors locked" and "windows closed" status chips no longer overlap.** On a narrow hero card — the 3-column desktop layout, or an iPad viewing the add-on inside Home Assistant's ingress iframe — the two corner-pinned chips printed on top of each other. They now share one self-adapting row that places them at opposite corners when there's room and stacks them when the card is narrow, independent of the label's translation length.
+
 ## [1.33.1] — 2026-06-25
 
 ### Fixed

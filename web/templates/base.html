@@ -157,6 +157,14 @@
     /* Fix Leaflet z-index overlap with sidebar */
     .leaflet-pane, .leaflet-control-container { z-index: 10 !important; }
     .leaflet-top, .leaflet-bottom { z-index: 10 !important; }
+
+    /* Mobile nav drawer. Below md the sidebar is hidden off-canvas by `-translate-x-full` (always
+       present in the markup). Opening the drawer adds `.drawer-open` to slide it in — WITHOUT
+       stripping the hide class — so it can never get stuck visible at narrow widths after an
+       open/close, and crossing the md breakpoint resets cleanly (matchMedia handler in the script). */
+    @media (max-width: 767px) {
+      #sidebar.drawer-open { transform: translateX(0); }
+    }
   </style>
 </head>
 <body class="h-full bg-slate-900 text-slate-100 flex flex-col md:flex-row" data-autorefresh="{% block autorefresh %}30{% endblock %}">
@@ -332,24 +340,42 @@
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
 
+    // Drawer open/close. Toggle a dedicated `.drawer-open` class — NOT the `-translate-x-full`
+    // utility that hides the sidebar below md — so the off-canvas hide stays owned by CSS and can
+    // never be left stripped (which used to leave the sidebar stuck visible at narrow widths).
+    function openMenu() {
+      sidebar.classList.add('drawer-open');
+      overlay.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+    function closeMenu() {
+      sidebar.classList.remove('drawer-open');
+      overlay.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
     function toggleMenu() {
-      sidebar.classList.toggle('-translate-x-full');
-      overlay.classList.toggle('hidden');
-      document.body.classList.toggle('overflow-hidden');
+      sidebar.classList.contains('drawer-open') ? closeMenu() : openMenu();
     }
 
     menuBtn?.addEventListener('click', toggleMenu);
-    closeBtn?.addEventListener('click', toggleMenu);
-    overlay?.addEventListener('click', toggleMenu);
+    closeBtn?.addEventListener('click', closeMenu);
+    overlay?.addEventListener('click', closeMenu);
 
-    // Close menu on navigation
+    // Close menu on navigation (a nav-link tap inside the open drawer)
     document.querySelectorAll('.nav-link').forEach(link => {
       link.addEventListener('click', () => {
-        if (!overlay.classList.contains('hidden')) {
-          toggleMenu();
-        }
+        if (sidebar.classList.contains('drawer-open')) closeMenu();
       });
     });
+
+    // Reset drawer state once we're at desktop width, so an open drawer can never leak across the
+    // 768px breakpoint and get stuck visible after resizing back to mobile. Listen to BOTH the
+    // breakpoint change and window resize for cross-browser reliability (and keep a reference to the
+    // MediaQueryList so it isn't garbage-collected).
+    const mqDesktop = window.matchMedia('(min-width: 768px)');
+    function resetDrawerIfDesktop() { if (mqDesktop.matches) closeMenu(); }
+    mqDesktop.addEventListener('change', resetDrawerIfDesktop);
+    window.addEventListener('resize', resetDrawerIfDesktop);
   </script>
 
   <script>

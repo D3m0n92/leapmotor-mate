@@ -14,15 +14,16 @@ def _setup(monkeypatch, rows):
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
     con.execute("CREATE TABLE positions (recorded_at TEXT, soc REAL, charging INT, "
-                "speed_kmh REAL, odometer_km REAL, ac_port_mode INT)")
-    con.executemany("INSERT INTO positions VALUES (?,?,?,?,?,?)", rows)
+                "speed_kmh REAL, odometer_km REAL, ac_port_mode INT, ready INT)")
+    con.executemany("INSERT INTO positions VALUES (?,?,?,?,?,?,?)", rows)
     con.commit()
     monkeypatch.setattr(db_reader, "_get", lambda: con)
 
 
-def P(hhmm, soc, charging=0, speed=0, odo=1000.0, acmode=0):
+def P(hhmm, soc, charging=0, speed=0, odo=1000.0, acmode=0, ready=None):
     # acmode = positions.ac_port_mode: 0 idle / 1 AC charging / 2 V2L discharge
-    return (f"2026-06-08T{hhmm}:00+00:00", soc, charging, speed, odo, acmode)
+    # ready  = positions.ready: 1 ON3 (car on) / 0 off / None = pre-signal → falls back to speed<1
+    return (f"2026-06-08T{hhmm}:00+00:00", soc, charging, speed, odo, acmode, ready)
 
 
 def test_basic_parked_drain(monkeypatch):
@@ -154,3 +155,32 @@ def test_v2l_discharge_is_excluded_from_drain(monkeypatch):
     assert sorted(w["drop_pct"] for w in out["windows"]) == [0.4, 0.4]
     assert all(w["drop_pct"] < 1.0 for w in out["windows"])          # no V2L drop leaked into a window
     assert out["typical_pct_per_day"] is not None and out["typical_pct_per_day"] < 5
+
+
+# ── Ready-based drain: power-OFF → next power-ON (precise) ─────────────────────
+
+def test_ready_off_window_is_counted(monkeypatch):
+    """New logic: a stretch with the car OFF (ready=0) draining → counted as vampire over exactly the
+    Ready-OFF→Ready-ON span (3% over 6h here)."""
+    _setup(monkeypatch, [P("00:00", 80, ready=0), P("02:00", 79, ready=0),
+                         P("04:00", 78, ready=0), P("06:00", 77, ready=0)])
+    out = db_reader.get_vampire_drain(lookback_days=BIG)
+    assert out["count"] == 1 and out["windows"][0]["drop_pct"] == 3.0
+
+
+def test_ready_on_idle_is_not_counted(monkeypatch):
+    """Car stationary but ON (Ready+P, ready=1, speed 0) draining climate → NOT vampire: that's the
+    driving session's on-state idle, not standby. No window."""
+    _setup(monkeypatch, [P("00:00", 80, ready=1), P("02:00", 78, ready=1), P("04:00", 76, ready=1)])
+    out = db_reader.get_vampire_drain(lookback_days=BIG)
+    assert out["count"] == 0 and out["typical_pct_per_day"] is None
+
+
+def test_off_climate_high_rate_is_included_not_excluded(monkeypatch):
+    """Remote pre-conditioning while OFF (ready=0, 4% over 2h ≈ 48 %/day): the OLD speed logic would
+    drop it as 'active use'; the NEW logic INCLUDES it (off-state drain) and only FLAGS it amber."""
+    _setup(monkeypatch, [P("00:00", 80, ready=0), P("02:00", 76, ready=0)])
+    out = db_reader.get_vampire_drain(lookback_days=BIG)
+    assert out["count"] == 1
+    assert out["windows"][0]["drop_pct"] == 4.0 and out["windows"][0]["active_use"] is True
+    assert out["typical_pct_per_day"] is not None        # counted in the headline, not excluded

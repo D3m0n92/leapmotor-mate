@@ -549,8 +549,10 @@ Unter *Einstellungen → Export/Backup* laden Sie die Datenbank (und die CSVs) h
 - **TOU** (*Time-of-Use*) — Tarif mit **Zeitfenstern** (unterschiedliche Preise je Tag/Stunde).
 - **Regen** (Rekuperation) — Energie, die beim Bremsen/Vom-Gas-Gehen **zurückgewonnen** und wieder in die Batterie
   gespeist wird.
-- **Vampire Drain** — der kleine **Ruhestromverlust** des Autos (Systeme im Standby), von Mate bei langen
-  Parkphasen gemessen.
+- **Vampire Drain** — was das Auto im **komplett ausgeschalteten** Zustand verbraucht, gemessen vom
+  Ausschalten bis zum nächsten Einschalten. **Enthält Heizen/Kühlen bei ausgeschaltetem Auto** (so
+  gewollt: Auto aus → zählt als Verlust). Leerlauf bei *eingeschaltetem* Auto (geparkt, Motor/Klima an)
+  zählt hier nicht.
 - **Polling** — das regelmäßige Auslesen des Fahrzeugzustands aus der Cloud (entlädt das Auto nicht).
 - **Wallbox** — Ihre heimische Ladestation.
 - **Poller / Web** — die beiden internen Komponenten von Mate: der *Poller* sammelt die Daten, das *Web* zeigt die

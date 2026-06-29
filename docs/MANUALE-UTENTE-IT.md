@@ -232,6 +232,11 @@ Più in basso trovi mini-statistiche e un **indicatore di "reattività auto"** (
   auto connessa), resta la **stima** — non è un errore. È **sempre attivo**, nessuna configurazione.
   > L'energia ufficiale può differire un po' dalla stima da SoC (è il conteggio "di guida" del cloud):
   > il viaggio mantiene comunque sempre un valore: ufficiale se c'è, altrimenti la stima.
+  - **Conteggiato da quando l'auto è ACCESA, non dall'inizio della guida 🆕** — il dato ufficiale copre
+    l'intera **sessione di accensione** (dall'accensione allo spegnimento), quindi può includere il tempo
+    ad auto accesa prima di partire. Se **non spegni mai l'auto tra due viaggi** (ti fermi, resti in P,
+    riparti), il cloud li conta come **un'unica** sessione — Mate ti avvisa di **unire i due viaggi** per
+    avere il consumo reale combinato.
 
 ### Mappa
 **(menu: Mappa)** — La posizione dell'auto su mappa. Mostra l'ultima posizione nota; se l'ultimo
@@ -561,8 +566,9 @@ Da *Impostazioni → Esporta/backup* scarichi il database (e i CSV). Conserva il
   assegnare; "HPC" è la ricarica ad altissima potenza.
 - **TOU** (*Time-of-Use*) — tariffa a **fasce orarie** (prezzi diversi per giorno/ora).
 - **Regen** — energia **recuperata** in frenata/rilascio e rimessa in batteria.
-- **Vampire drain** — il piccolo **consumo da fermo** dell'auto (sistemi in standby), misurato da
-  Mate sulle soste lunghe.
+- **Vampire drain** — quello che l'auto consuma da **completamente spenta**, misurato dallo spegnimento
+  alla successiva accensione. **Include il riscaldamento/raffrescamento ad auto spenta** (by design: auto
+  spenta → conta come drain). L'idle ad auto *accesa* (ferma, motore/clima attivo) non rientra qui.
 - **Polling** — la lettura periodica dello stato dell'auto dal cloud (non scarica l'auto).
 - **Wallbox** — la tua stazione di ricarica domestica.
 - **Poller / Web** — i due componenti interni di Mate: il *poller* raccoglie i dati, il *web* mostra

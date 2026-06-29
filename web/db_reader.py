@@ -962,10 +962,26 @@ def trip_ec_window(trip: dict, pad_s: int = 120):
       START = T0 − pad_s, CLAMPED to the midpoint with the PREVIOUS trip (never into its energy).
       END   = T1, with NO padding — the energy is at the start anchor, and T1 + pad would risk
               landing in the FUTURE (getEC then returns None) and could reach the NEXT trip.
+
+    CAVEAT — the cloud's SESSION ≠ Mate's TRIP. The session runs from READY (power-on) until the car
+    is switched OFF, so it can span SEVERAL Mate trips + long idle in Park (verified 22/06: trips
+    133+134, the car never powered off between them → ONE session anchored at the first start; the
+    second trip's window, being AFTER that anchor, returns None). Consequences: the FIRST drive after
+    Ready catches the anchor and gets the WHOLE session (which may include pre-drive climate / idle /
+    later drives → can over-read); a LATER drive in the same no-power-off run sits past the anchor →
+    getEC returns None → the trip stays on the SoC estimate. The bigger the Ready→D gap (sitting in
+    Ready with climate before shifting to D), the more likely a later trip misses it. Upstream (cloud
+    session definition, not fixable here); ec_enrich._ec_implausible catches the absurd over-reads.
     Returns (begin_ts, end_ts) or (None, None)."""
     b, e = trip_epoch_window(trip)
     if not b or not e:
         return (None, None)
+    # PRIMARY: the REAL session start (Ready-on, PID 1258) when we have it — the exact cloud anchor,
+    # no guessing (verified: Ready-on = the getEC anchor). end stays T1.
+    sess = ready_session(trip)
+    if sess:
+        return (int(sess["on"]), int(e))
+    # FALLBACK (old trips with no ready data): T0 − pad, clamped to the previous trip's midpoint.
     db = _get()
     begin = b - pad_s
     prev = db.execute(
@@ -976,6 +992,78 @@ def trip_ec_window(trip: dict, pad_s: int = 120):
         if pe:
             begin = max(begin, (pe + b) // 2)
     return (int(begin), int(e))
+
+
+_READY_DEBOUNCE_S = 90        # ignore ready=0 dips shorter than this — signal blips seen in the log
+_READY_LOOKBACK_S = 6 * 3600  # how far around the trip to scan positions for the session bounds
+
+
+def ready_session(trip: dict):
+    """Reconstruct the car's power-on session (READY/ON3, PID 1258) that brackets this trip, from the
+    per-poll `positions.ready` log. The cloud's getEC session runs from Ready-ON to power-OFF and can
+    span SEVERAL Mate trips + idle (verified 22/06: trips 133+134 = one session) → this is the REAL
+    getEC window AND tells us whether a trip shares its session with others.
+
+    Returns {on, off, n_trips, trip_ids} (epoch seconds) or None when no ready data covers the trip
+    (old trips before the signal existed → caller falls back to the T0−2min window). Brief ready=0
+    dips shorter than _READY_DEBOUNCE_S are treated as still-on (blips)."""
+    t0, t1 = _trip_epoch(trip.get("started_at")), _trip_epoch(trip.get("ended_at"))
+    if not t0 or not t1:
+        return None
+    db = _get()
+    lo = datetime.fromtimestamp(t0 - _READY_LOOKBACK_S, timezone.utc).isoformat()
+    hi = datetime.fromtimestamp(t1 + _READY_LOOKBACK_S, timezone.utc).isoformat()
+    rows = db.execute(
+        "SELECT recorded_at, ready FROM positions WHERE recorded_at >= ? AND recorded_at <= ? "
+        "ORDER BY recorded_at", (lo, hi)).fetchall()
+    samples, last = [], None
+    for r in rows:
+        e = _trip_epoch(r["recorded_at"])
+        if e is None:
+            continue
+        rd = r["ready"]
+        rd = (last if last is not None else 0) if rd is None else rd  # carry-forward unknown
+        last = rd
+        samples.append((e, rd))
+    if not any(rd for _, rd in samples):
+        return None                          # no ready=1 anywhere → no session info
+    # Build ready=1 runs, then merge runs separated by a ready=0 gap shorter than the debounce.
+    runs, cur = [], None
+    for e, rd in samples:
+        if rd == 1:
+            cur = [e, e] if cur is None else [cur[0], e]
+        elif cur is not None:
+            runs.append(cur); cur = None
+    if cur is not None:
+        runs.append(cur)
+    merged = []
+    for run in runs:
+        if merged and run[0] - merged[-1][1] < _READY_DEBOUNCE_S:
+            merged[-1][1] = run[1]
+        else:
+            merged.append(list(run))
+    # The session = the run that brackets the trip (small slack: the gear-P trip-end lags ready-off
+    # by ~1 min, and ready-on can sit a poll after T0).
+    sess = next(((s, e) for s, e in merged
+                 if s - _READY_DEBOUNCE_S <= t0 and t1 <= e + _READY_DEBOUNCE_S), None)
+    if sess is None:                         # fallback: any run overlapping the trip
+        sess = next(((s, e) for s, e in merged if not (e < t0 or s > t1)), None)
+    if sess is None:
+        return None
+    on, off = sess
+    # Count finalized, non-merged trips whose span falls inside the session.
+    olo = datetime.fromtimestamp(on - _READY_DEBOUNCE_S, timezone.utc).isoformat()
+    ohi = datetime.fromtimestamp(off + _READY_DEBOUNCE_S, timezone.utc).isoformat()
+    trs = db.execute(
+        "SELECT id, started_at, ended_at FROM trips WHERE merged_into_id IS NULL "
+        "AND ended_at IS NOT NULL AND ended_at >= ? AND started_at <= ? ORDER BY started_at",
+        (olo, ohi)).fetchall()
+    ids = []
+    for tr in trs:
+        ts0, ts1 = _trip_epoch(tr["started_at"]), _trip_epoch(tr["ended_at"])
+        if ts0 and ts1 and ts0 >= on - _READY_DEBOUNCE_S and ts1 <= off + _READY_DEBOUNCE_S:
+            ids.append(tr["id"])
+    return {"on": int(on), "off": int(off), "n_trips": len(ids), "trip_ids": ids}
 
 
 def get_trips_needing_ec(cutoff_iso: str, limit: int = 5, min_age_s: int = 600,
@@ -1248,8 +1336,16 @@ def merge_trips(parent_id: int, child_id: int, gap_min: int = TRIP_MERGE_GAP_DEF
     kids = _children_by_parent(db)
     a_grp = _trip_group_stats(a, kids.get(a["id"], []))
     gap = _gap_minutes(a_grp.get("ended_at"), b.get("started_at"))
-    if gap is None or gap < 0 or gap >= gap_min:
+    if gap is None or gap < 0:
         return {"ok": False, "error": "gap_too_large"}
+    if gap >= gap_min:
+        # Normally a stop ≥ gap_min is a separate trip. EXCEPTION: if the two trips share ONE power-on
+        # (Ready) session — the car was never switched off between them — the cloud bundles them into
+        # one driving session anyway, so allow the merge at ANY gap (the only way to get the official
+        # combined figure). Detected from the real positions.ready log.
+        sess = ready_session(a_grp)
+        if not (sess and b["id"] in sess.get("trip_ids", [])):
+            return {"ok": False, "error": "gap_too_large"}
     if (a_grp.get("end_soc") is not None and b.get("start_soc") is not None
             and b["start_soc"] > a_grp["end_soc"]):
         return {"ok": False, "error": "soc_rose_charge_in_gap"}
@@ -2503,8 +2599,12 @@ _VAMPIRE_ACTIVE_USE_RATE = 15.0  # %/day above this is active use (A/C, meeting,
 
 def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
                       lookback_days: int = 90, limit: int = 60) -> dict:
-    """Vampire drain = SoC lost while the car is PARKED and NOT charging. Scans the per-poll
-    `positions` log, groups consecutive parked-idle samples (charging=0, not moving) into windows
+    """Vampire drain = SoC lost while the car is OFF (Ready/ON3 = 0) and NOT charging — measured
+    exactly from power-OFF to the next power-ON (precise, via positions.ready; falls back to the old
+    speed<1 "parked" test only for trips logged before the ready signal existed). This INCLUDES
+    off-state remote heating/cooling (it ran while the car was off) and EXCLUDES on-state idle
+    (Ready+P with climate, which belongs to the driving session). Scans the per-poll
+    `positions` log, groups consecutive OFF samples (charging=0, not moving) into windows
     bounded by any charging or driving — driving is detected by speed OR a rise in odometer between
     idle samples, so a drive that happened during a reporting gap can't be mistaken for drain. Each
     kept window reports its SoC drop, a normalised %/day rate, the rate's quantization error band
@@ -2520,7 +2620,7 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
     floor = min(min_drop_pct, _VAMPIRE_NOISE_FLOOR)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
     rows = db.execute(
-        "SELECT recorded_at, soc, charging, speed_kmh, odometer_km, ac_port_mode FROM positions "
+        "SELECT recorded_at, soc, charging, speed_kmh, odometer_km, ac_port_mode, ready FROM positions "
         "WHERE soc IS NOT NULL AND recorded_at >= ? ORDER BY recorded_at",
         (cutoff,),
     ).fetchall()
@@ -2547,13 +2647,14 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
         hours = (t1 - t0).total_seconds() / 3600.0
         drop = (w["soc0"] or 0) - (soc_end or 0)
         pct_per_day = drop / hours * 24 if hours else 0
+        # OFF-state high-rate windows are flagged (amber) as likely remote heating/cooling, but — unlike
+        # the old speed-based logic — they are NOT excluded: drain while the car is OFF is OFF drain by
+        # the Ready-OFF→Ready-ON definition (the in-card note says off-climate is included).
         active_use = pct_per_day > _VAMPIRE_ACTIVE_USE_RATE
-        if hours >= min_hours and not active_use:
-            # Headline aggregate: every park long enough to measure counts, including zero-drop
-            # ones — a "drain happened"-only sample reads high (selection bias). SoC up-ticks
-            # while parked are BMS jitter, not charging → clamp to 0.
-            # Active-use windows (rate > threshold) are excluded: that's intentional
-            # consumption (A/C, screen, user in car), not standby loss.
+        if hours >= min_hours:
+            # Headline aggregate: every OFF stretch long enough to measure counts, including zero-drop
+            # ones (a "drain happened"-only sample reads high — selection bias). SoC up-ticks are BMS
+            # jitter → clamp to 0.
             agg["hours"] += hours
             agg["drop"] += max(drop, 0.0)
         # Compare the rounded drop: raw float drops sit a hair off the threshold
@@ -2582,7 +2683,12 @@ def get_vampire_drain(min_hours: float = 1.0, min_drop_pct: float = 0.2,
         # but actively powering an external load, so that SoC loss is V2L output, not vampire drain.
         # Treat it like charging — it BOUNDS the parked window and its drop is never read as drain.
         v2l = r["ac_port_mode"] == 2
-        idle = (not r["charging"]) and (not v2l) and ((r["speed_kmh"] or 0) < 1)
+        # OFF window = car powered down (Ready/ON3 = 0), not charging, not V2L. Falls back to the old
+        # speed<1 test only when the ready signal is absent (trips before it was logged). The drain now
+        # spans exactly Ready-OFF → next Ready-ON: on-state idle (Ready+P with climate) is NOT counted,
+        # while OFF-state remote heating/cooling IS (per the in-card note).
+        rd = r["ready"]
+        idle = (not r["charging"]) and (not v2l) and (rd == 0 if rd is not None else (r["speed_kmh"] or 0) < 1)
         odo = r["odometer_km"]
         # a rise in odometer since the window's last idle sample → a drive happened (even if its
         # samples were missed) → the park ended there.

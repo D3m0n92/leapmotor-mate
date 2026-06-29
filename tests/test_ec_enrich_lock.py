@@ -351,6 +351,99 @@ def test_convert_trip_high_but_soc_consistent_accepted(tmp_path, monkeypatch):
     assert eff == pytest.approx(66.7, abs=0.1)     # 1.0 / 1.5 km * 100
 
 
+# ── Ready-session window + shared-session detection (the 22/06 case) ──────────
+
+def _ready(pdb, on, off, step=30):
+    """Insert positions.ready=1 from `on` to `off` (datetimes), bracketed by ready=0 outside."""
+    pdb._conn.execute("INSERT INTO positions (vehicle_id, recorded_at, ready) VALUES (1,?,0)",
+                      ((on - timedelta(minutes=2)).isoformat(),))
+    t = on
+    while t <= off:
+        pdb._conn.execute("INSERT INTO positions (vehicle_id, recorded_at, ready) VALUES (1,?,1)",
+                          (t.isoformat(),))
+        t += timedelta(seconds=step)
+    pdb._conn.execute("INSERT INTO positions (vehicle_id, recorded_at, ready) VALUES (1,?,0)",
+                      ((off + timedelta(minutes=2)).isoformat(),))
+    pdb._conn.commit()
+
+
+def _two_session_trips(tmp_path, monkeypatch, *, ready_continuous):
+    """Trip 1 (4 km) then trip 2 (3 km) 40 min later. If ready_continuous, the car stayed ON the whole
+    time (one power-on session spanning both); else it powered off between them (two sessions)."""
+    pdb = D.Database(str(tmp_path / "t.db"))
+    monkeypatch.setattr(db_reader, "DB_PATH", str(tmp_path / "t.db"))
+    now = datetime.now(timezone.utc)
+    aS = now - timedelta(hours=2); aE = aS + timedelta(minutes=15)
+    bS = aE + timedelta(minutes=40); bE = bS + timedelta(minutes=12)
+    pdb._conn.execute("INSERT INTO trips (id,vehicle_id,started_at,ended_at,distance_km,"
+                      "efficiency_kwh_100km,start_soc,end_soc) VALUES (1,1,?,?,4.0,26.0,95,93)",
+                      (aS.isoformat(), aE.isoformat()))
+    pdb._conn.execute("INSERT INTO trips (id,vehicle_id,started_at,ended_at,distance_km,"
+                      "efficiency_kwh_100km,start_soc,end_soc) VALUES (2,1,?,?,3.0,24.0,93,92)",
+                      (bS.isoformat(), bE.isoformat()))
+    pdb._conn.commit()
+    db_reader.set_setting("ec_trip_energy_enabled", "1")
+    db_reader.set_setting("ec_trip_since", (aS - timedelta(hours=1)).isoformat())
+    if ready_continuous:
+        _ready(pdb, aS, bE)                       # one session covering BOTH trips
+    else:
+        _ready(pdb, aS, aE); _ready(pdb, bS, bE)  # two separate sessions
+    return pdb
+
+
+def test_ready_session_detects_shared_and_blocks_convert(tmp_path, monkeypatch):
+    """22/06 case: car never powered off between two trips → ONE Ready session over both → converting
+    either alone is blocked with reason 'shared_session' (would grab the whole session)."""
+    pdb = _two_session_trips(tmp_path, monkeypatch, ready_continuous=True)
+    s = db_reader.ready_session(dict(pdb._conn.execute("SELECT * FROM trips WHERE id=1").fetchone()))
+    assert s and s["n_trips"] == 2 and set(s["trip_ids"]) == {1, 2}
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(2.3))
+    assert ec_enrich.convert_trip(1)["reason"] == "shared_session"
+    assert ec_enrich.convert_trip(2)["reason"] == "shared_session"
+
+
+def test_separate_sessions_not_blocked(tmp_path, monkeypatch):
+    """Same two trips but the car WAS powered off between them → two sessions → NOT shared → each
+    converts on its own Ready window."""
+    pdb = _two_session_trips(tmp_path, monkeypatch, ready_continuous=False)
+    s = db_reader.ready_session(dict(pdb._conn.execute("SELECT * FROM trips WHERE id=1").fetchone()))
+    assert s["n_trips"] == 1 and s["trip_ids"] == [1]
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(1.0))
+    assert ec_enrich.convert_trip(1)["ok"] is True
+
+
+def test_merge_shared_session_then_convert_combined(tmp_path, monkeypatch):
+    """After merging the two trips of a shared session, the group converts over the COMBINED distance
+    (the user's resolution): 2.3 kWh / 7 km = 32.9 kWh/100 km."""
+    pdb = _two_session_trips(tmp_path, monkeypatch, ready_continuous=True)
+    assert db_reader.merge_trips(1, 2)["ok"] is True
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range",
+                        lambda b, e: {"driving_kwh": 1.3, "ac_kwh": 0.8, "other_kwh": 0.2,
+                                      "total_kwh": 2.3, "driving_pct": 57, "ac_pct": 35, "other_pct": 8})
+    assert ec_enrich.convert_trip(1)["ok"] is True
+    det = db_reader.get_trip_detail(1)
+    assert det["distance_km"] == pytest.approx(7.0)
+    assert det["ec_kwh"] == pytest.approx(2.3)
+    assert det["efficiency_kwh_100km"] == pytest.approx(32.9, abs=0.2)
+
+
+def test_guards_stay_for_single_trip_even_with_ready_session(tmp_path, monkeypatch):
+    """Even on the Ready-session path the plausibility guards STAY for a SINGLE trip — it's about
+    correctness, not just the window. A getEC implausible vs the trip's own ΔSoC is rejected → SoC kept:
+    HIGH = the session swallowed pre-drive idle/climate, so getEC over-states the drive (drive-only SoC
+    is truer); LOW = a genuine cloud gap. (The multi-trip case is handled by the shared-session block.)"""
+    pdb = _setup(tmp_path, monkeypatch, age_min=120)   # trip 1, 7 km, SoC eff 30 → ΔSoC ref ≈ 2.1 kWh
+    tr = dict(db_reader._get().execute("SELECT * FROM trips WHERE id=1").fetchone())
+    _ready(pdb, datetime.fromisoformat(tr["started_at"]), datetime.fromisoformat(tr["ended_at"]))
+    # HIGH (5.0 kWh / 7 km = 71 kWh/100km, 2.4× the ΔSoC) → rejected, estimate kept
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(5.0))
+    assert ec_enrich.convert_trip(1)["reason"] == "implausible"
+    assert _row(pdb)[3] == pytest.approx(30.0)
+    # LOW (0.2 kWh, a genuine gap) → also rejected
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(0.2))
+    assert ec_enrich.convert_trip(1)["reason"] == "implausible"
+
+
 # ── recovery: per-trip "Revert to estimate" ──────────────────────────────────
 
 def test_revert_trip_ec_restores_estimate(tmp_path, monkeypatch):

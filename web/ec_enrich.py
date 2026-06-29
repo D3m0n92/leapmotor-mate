@@ -62,19 +62,20 @@ def _soc_energy_kwh(d: dict, dist: float):
 
 def _ec_implausible(ec: dict, dist: float, soc_energy) -> bool:
     """True when a getEC reading is physically implausible vs the trip's SoC battery delta → keep the
-    estimate instead of applying it. Two SYMMETRIC cases, each needing BOTH an absolute-efficiency
-    signal AND a SoC-mismatch signal (so a genuinely low/high but consistent trip is still accepted;
-    with no SoC reference we can't judge → accept):
-      • INCOMPLETE (#96): eff < _MIN_PLAUSIBLE_EFF AND total < _MAX_EC_SOC_SHORTFALL × SoC
-        — the cloud captured only a fraction of the trip.
-      • OVER-ATTRIBUTED (#98): eff > _MAX_PLAUSIBLE_EFF AND total > _MAX_EC_SOC_OVERSHOOT × SoC
-        — typical on very short trips, where the window's 2-min pre-pad (A/C/standby) dwarfs the drive."""
+    estimate instead. Each side needs BOTH an efficiency signal AND a SoC-mismatch signal (a genuinely
+    low/high but SoC-consistent trip is accepted; with no SoC reference → accept):
+      • LOW (#96): eff < _MIN_PLAUSIBLE_EFF AND total < _MAX_EC_SOC_SHORTFALL × SoC — the cloud only
+        captured a fraction / genuinely lacks it (a real gap no window fixes).
+      • HIGH (#98): eff > _MAX_PLAUSIBLE_EFF AND total > _MAX_EC_SOC_OVERSHOOT × SoC — the value
+        over-states THIS drive (e.g. a single trip whose session swallowed pre-drive idle/climate; the
+        drive-only SoC is the truer per-trip figure). The MULTI-trip session case is handled earlier by
+        the shared-session block, so this fires only on single trips."""
     if not ec or not dist or dist <= 0 or not soc_energy:
         return False
     total = ec.get("total_kwh") or 0
     eff = total / dist * 100
     if eff < _MIN_PLAUSIBLE_EFF and total < soc_energy * _MAX_EC_SOC_SHORTFALL:
-        return True                                # too low → incomplete (#96)
+        return True                                # too low → incomplete / cloud gap (#96)
     if eff > _MAX_PLAUSIBLE_EFF and total > soc_energy * _MAX_EC_SOC_OVERSHOOT:
         return True                                # too high → over-attributed (#98)
     return False
@@ -151,15 +152,23 @@ def _sweep_now() -> None:
             if not b or not e:
                 db_reader.store_trip_ec(t["id"], None, t.get("distance_km"), apply)
                 continue
-            bq, eq = db_reader.trip_ec_window(t)    # padded + neighbour-clamped → the exact window
+            # Shared power-on session: if OTHER trips share this trip's Ready session (car never powered
+            # off between them), DON'T auto-apply a per-trip value — it'd grab the whole session. Leave
+            # it on SoC; the user merges them by hand (convert_trip then converts the combined group).
+            sess = db_reader.ready_session(t)
+            if sess and (set(sess["trip_ids"]) - {t["id"]}):
+                db_reader.store_trip_ec(t["id"], None, t.get("distance_km"), apply)
+                log.info("EC trip %s: shared Ready session %s — left on SoC (merge to convert)",
+                         t["id"], sess["trip_ids"])
+                continue
+            bq, eq = db_reader.trip_ec_window(t)    # Ready-on→T1 (or fallback) → the exact window
             ec = command_client.get_energy_breakdown_range(bq or b, eq or e)  # can miss the bucket
             dist = t.get("distance_km") or 0
             age = now - e
             tried = (t.get("ec_tried") or 0) + 1
-            # Plausibility guard (#96 low / #98 high): discard a reading that's physically implausible
-            # vs the SoC battery delta — too low (incomplete aggregation) OR too high (over-attributed,
-            # short-trip pre-pad). Treat as a miss → keep retrying / stay SoC. A genuinely low/high but
-            # SoC-consistent trip passes (_ec_implausible needs both an efficiency and a SoC signal).
+            # Plausibility net: a single trip whose getEC is implausible vs its own ΔSoC → discard, stay
+            # SoC. LOW = cloud gap; HIGH = session swallowed pre-drive idle (drive-only SoC is truer).
+            # The multi-trip shared-session case was already skipped above.
             soc_e = _soc_energy_kwh(t, dist)
             if _ec_implausible(ec, dist, soc_e):
                 log.info("EC trip %s: implausible read %.2f kWh (SoC≈%.2f kWh) — discarded (age %.0fm, try %d)",
@@ -225,6 +234,15 @@ def convert_trip(trip_id: int) -> dict:
     dist = grp.get("distance_km") or 0
     if dist <= 0:
         return {"ok": False, "reason": "no_distance"}
+    # Shared power-on SESSION guard (#98 root): the cloud's getEC runs Ready-ON→OFF and can span SEVERAL
+    # Mate trips + idle. If OTHER finalized trips share this trip's Ready session (the car was never
+    # powered off between them — read from positions.ready), converting this one alone would grab the
+    # WHOLE session → tell the user to MERGE them (only the merged group attributes the figure over the
+    # full distance). Detected from the real signal, so it works at ANY gap (not the 5-min heuristic).
+    own_ids = {trip_id} | {c["id"] for c in children}
+    sess = db_reader.ready_session(grp)
+    if sess and (set(sess["trip_ids"]) - own_ids):
+        return {"ok": False, "reason": "shared_session"}
     bq, eq = db_reader.trip_ec_window(grp)
     if not bq or not eq:
         return {"ok": False, "reason": "no_window"}
@@ -253,6 +271,11 @@ def convert_trip(trip_id: int) -> dict:
     # high (over-attributed, e.g. a very short trip whose 2-min window pre-pad dwarfs the drive).
     # Applying it would overwrite the reliable SoC estimate; a genuinely low/high but SoC-consistent
     # trip is still accepted. The manual button must not do what the background sweep refuses to.
+    # Plausibility net (kept on the Ready path too — it's about correctness, not just the window): a
+    # SINGLE trip whose getEC is implausible vs its own ΔSoC is rejected → keep the SoC estimate. LOW =
+    # genuine cloud gap. HIGH = the session swallowed pre-drive idle/climate, so getEC over-states THIS
+    # drive (the trip = the drive; drive-only SoC is the truer per-trip figure). The MULTI-trip case is
+    # already handled above by the shared-session block, so here it only ever sees single trips.
     soc_e = _soc_energy_kwh(grp, dist)
     if _ec_implausible(ec, dist, soc_e):
         db_reader.store_trip_ec(trip_id, None, dist, apply_energy=False)  # record attempt, change nothing

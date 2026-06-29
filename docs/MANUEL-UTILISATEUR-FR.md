@@ -565,8 +565,9 @@ données **avec sa `secret.key`**.
   pouvez assigner ; « HPC » est la recharge à très haute puissance.
 - **TOU** (*Time-of-Use*) — tarif à **plages horaires** (prix différents selon le jour/l'heure).
 - **Régén** — énergie **récupérée** au freinage/au lâcher de l'accélérateur et remise en batterie.
-- **Vampire drain** — la petite **décharge à l'arrêt** de la voiture (systèmes en veille), mesurée par Mate
-  sur les arrêts longs.
+- **Vampire drain** — ce que la voiture consomme **complètement éteinte**, mesuré de l'extinction au
+  prochain démarrage. **Inclut le chauffage/refroidissement voiture éteinte** (par conception : voiture
+  éteinte → compté comme décharge). Le ralenti voiture *allumée* (à l'arrêt, moteur/clim. actif) n'y entre pas.
 - **Polling** — la lecture périodique de l'état de la voiture depuis le cloud (ne décharge pas la voiture).
 - **Wallbox** — votre station de recharge domestique.
 - **Poller / Web** — les deux composants internes de Mate : le *poller* collecte les données, le *web* affiche

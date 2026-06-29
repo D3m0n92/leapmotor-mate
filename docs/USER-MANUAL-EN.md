@@ -230,6 +230,11 @@ duration, consumption (kWh/100 km), energy recovered** in braking and the estima
   official one and the **breakdown** appears in the detail. Older trips have a **"Convert with official
   data"** button. If the cloud doesn't have a trip's data (it happens, on any connected car), the
   **estimate** stays — not an error. **Always on**, no setup.
+  - **Counted from when the car is switched ON, not from the drive 🆕** — the official figure covers the
+    whole **power-on session** (from switch-on to switch-off), so it can include time the car was on
+    before you started driving. If you **never switch the car off between two trips** (you stop, stay in
+    Park, drive again), the cloud counts them as **one** session — Mate tells you to **merge the two
+    trips** to get the real combined consumption.
 
 ### Map
 **(menu: Map)** — The car's position on a map. It shows the last known position; if the latest data
@@ -542,8 +547,9 @@ its `secret.key`**.
   assign; "HPC" is very-high-power charging.
 - **TOU** (*Time-of-Use*) — a **time-band** tariff (different prices by day/hour).
 - **Regen** — energy **recovered** in braking/lift-off and put back into the battery.
-- **Vampire drain** — the car's small **idle drain** while parked (systems in standby), measured by
-  Mate over long stops.
+- **Vampire drain** — what the car consumes while **completely switched off**, measured from power‑off
+  to the next power‑on. It **includes remote heating/cooling done with the car off** (by design — car
+  off → it counts as drain). Idle with the car *on* (parked, engine/climate running) is not counted here.
 - **Polling** — the periodic reading of the car's status from the cloud (does not drain the car).
 - **Wallbox** — your home charging station.
 - **Poller / Web** — Mate's two internal components: the *poller* collects the data, the *web* shows

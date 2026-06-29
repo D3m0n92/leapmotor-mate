@@ -3,6 +3,19 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.35.0] — 2026-06-29
+
+This release makes Mate use the car's real **power-on (Ready) signal** to bound both the official trip consumption and the battery-drain calculation — replacing time-based guesses with the exact moments the car was switched on and off.
+
+### Changed
+- **Official trip consumption is now measured from when the car is switched ON (Ready), not from when driving starts.** The cloud's official figure (`getEC`) covers a whole power-on session — from the moment you power up until you switch off — so Mate now aligns its query to that exact window instead of guessing "2 minutes before the drive". This is more accurate and removes the occasional missing/inflated values on the first try.
+  - **If the car is never switched off between two trips** (e.g. you stop, stay in Park with the engine on, then drive again), the cloud counts them as **one session**. Mate detects this and asks you to **merge the trips** to get the real combined consumption — merging is now allowed at any gap for trips that share one power-on session, and converts the combined drive over its full distance.
+  - A trip whose official figure is implausible versus the battery's actual SoC change is still kept on the reliable estimate (no impossible numbers), and every conversion stays reversible with **"Revert to estimate"**.
+- **Battery (vampire) drain is now measured from when the car is COMPLETELY OFF — power-off to the next power-on.** Everything the car consumes while off is counted as drain, **including remote heating/cooling (pre-conditioning) done while the car is off** — by design: car off → it's drain. On‑state idle (parked with the engine on / climate running) is no longer mixed into the drain figure (it belongs to the trip). The Battery-health card explains this.
+
+### Notes
+- Both calculations fall back to the previous behaviour for trips/periods recorded before the Ready signal was logged, so existing history is unaffected.
+
 ## [1.34.2] — 2026-06-29
 
 ### Fixed

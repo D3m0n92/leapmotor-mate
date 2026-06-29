@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.34.2"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.35.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -445,6 +445,10 @@ async def trip_convert_ec(request: Request, trip_id: int):
     if res.get("reason") == "merged_cloud":
         # Actionable (amber): merging the two trips would recover the data.
         return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠️ {t("ec_convert_merged")}</span>')
+    if res.get("reason") == "shared_session":
+        # Actionable (amber): the car was never powered off, so the cloud bundles these trips into one
+        # session — merging them lets Mate convert the combined drive over its full distance.
+        return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠️ {t("ec_convert_shared")}</span>')
     if res.get("reason") == "implausible":
         # The cloud returned a value, but it's an incomplete aggregation (would imply an impossible
         # efficiency). Calm tone: the reliable SoC estimate above is deliberately kept, nothing broke.

@@ -3,6 +3,19 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.34.1] — 2026-06-29
+
+### Fixed
+- **"Convert with official data" no longer overwrites a good estimate with an incomplete cloud figure.** On some trips the cloud's official consumption (`getEC`) comes back only partially aggregated — a value that would imply an impossible efficiency (e.g. a 33 km drive showing **1.5 kWh/100 km**). The button now **refuses** such a value and keeps the reliable SoC estimate, cross‑checking the cloud figure against the trip's actual battery use (ΔSoC × pack) so a genuinely low‑consumption trip is still accepted. No data is ever lost. (Reported in #96.)
+
+### Added
+- **"Revert to estimate" button** on a converted trip — undo an official‑data conversion and restore the SoC estimate at any time (you can convert again later). Every conversion is now fully reversible from the trip page.
+- **Arrival odometer** on the trip detail, right under the start odometer. (#95)
+- **Regeneration and cost per period** — the kWh recovered and the period's cost are now shown on the **year / month / day** rows of the Trips list, next to the existing distance and consumption. (#95)
+
+### Changed
+- **"Efficiency" is now labelled "Average consumption"** across the app (Trips, Statistics, Report, trip detail) — closer to the universal automotive wording. Charge efficiency (%) is unchanged. (#95)
+
 ## [1.34.0] — 2026-06-29
 
 ### Added

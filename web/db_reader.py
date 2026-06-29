@@ -990,7 +990,8 @@ def get_trips_needing_ec(cutoff_iso: str, limit: int = 5, min_age_s: int = 600,
     not_before = (now - timedelta(seconds=giveup_age_s)).isoformat()  # ended_at >= this (not too old)
     db = _conn_rw()
     rows = db.execute(
-        """SELECT id, started_at, ended_at, distance_km, ec_kwh FROM trips
+        """SELECT id, started_at, ended_at, distance_km, ec_kwh,
+                  efficiency_kwh_100km, efficiency_soc, start_soc, end_soc FROM trips
            WHERE merged_into_id IS NULL AND ended_at IS NOT NULL
              AND started_at >= ? AND ended_at <= ? AND ended_at >= ?
              AND COALESCE(ec_stable, 0) = 0 AND COALESCE(ec_tried, 0) < 80 AND distance_km > 0
@@ -1045,6 +1046,25 @@ def revert_ec_trip_energy() -> int:
         "UPDATE trips SET efficiency_kwh_100km = efficiency_soc WHERE efficiency_soc IS NOT NULL")
     db.commit()
     return cur.rowcount
+
+
+def revert_trip_ec(trip_id: int) -> bool:
+    """Undo ONE trip's getEC conversion ('Revert to estimate' button): restore the SoC efficiency
+    backed up at apply time, drop the EC split, and clear the lock so the trip shows the estimate
+    again (and the Convert button comes back). ec_tried is parked at the sweep's give-up threshold
+    (see get_trips_needing_ec: `ec_tried < 80`) so the background sweep won't silently re-convert a
+    trip the user explicitly reverted — a manual Convert still works (convert_trip ignores ec_tried).
+    Only touches trips that were actually converted (efficiency_soc set). Returns True if reverted."""
+    db = _conn_rw()
+    cur = db.execute(
+        """UPDATE trips
+              SET efficiency_kwh_100km = COALESCE(efficiency_soc, efficiency_kwh_100km),
+                  ec_kwh = NULL, ec_driving = NULL, ec_ac = NULL, ec_other = NULL,
+                  ec_stable = 0, ec_tried = 80
+            WHERE id = ? AND efficiency_soc IS NOT NULL""",
+        (trip_id,))
+    db.commit()
+    return cur.rowcount > 0
 
 
 def delete_charge(charge_id: int) -> bool:
@@ -1313,12 +1333,14 @@ def get_trips_grouped() -> list[dict]:
     from collections import OrderedDict
 
     def _node(label):
-        return {"label": label, "km": 0, "count": 0,
+        return {"label": label, "km": 0, "count": 0, "regen": 0.0, "cost": 0.0,
                 "_eff_wsum": 0.0, "_eff_wdist": 0.0, "avg_eff": None}
 
-    def _add(node, km, eff):
+    def _add(node, km, eff, regen, cost):
         node["km"]    = round(node["km"] + km, 2)
         node["count"] += 1
+        node["regen"] = round(node["regen"] + (regen or 0), 3)
+        node["cost"]  = round(node["cost"] + (cost or 0), 2)
         if eff and km > 0:
             node["_eff_wsum"]  += km * eff
             node["_eff_wdist"] += km
@@ -1333,6 +1355,29 @@ def get_trips_grouped() -> list[dict]:
     _ec_on = get_setting("ec_trip_energy_enabled", "1") == "1"
     _ec_cutoff = get_setting("ec_trip_since", "")
     _now_ts = datetime.now(timezone.utc).timestamp()
+    # Cost per group = Σ per-trip cost, each at the battery's blended €/kWh AT the trip's time (#53,
+    # same basis as get_trip_detail). The blend only moves when a PRICED charge ends, so build that
+    # (ended_at → blended price) timeline ONCE per vehicle instead of calling blended_price_at per trip.
+    _cost_bp: dict = {}
+    _seen_ch: dict = {}
+    for _c in _get().execute(
+            "SELECT vehicle_id, ended_at, start_soc, end_soc, cost, ac_energy_kwh, location_type, "
+            "energy_added_kwh FROM charges WHERE ended_at IS NOT NULL AND cost IS NOT NULL "
+            "AND energy_added_kwh > 0 ORDER BY vehicle_id, ended_at").fetchall():
+        _seen_ch.setdefault(_c["vehicle_id"], []).append(dict(_c))
+        _cost_bp.setdefault(_c["vehicle_id"], []).append(
+            (_c["ended_at"], _wac_blend(_seen_ch[_c["vehicle_id"]])))
+
+    def _rate_at(vehicle_id, ts_utc):
+        """Blended €/kWh in effect at ts_utc = the last breakpoint whose charge ended at/before it."""
+        rate = None
+        for ended_at, wac in _cost_bp.get(vehicle_id, ()):   # ascending → last ≤ ts wins
+            if ended_at <= ts_utc:
+                rate = wac
+            else:
+                break
+        return rate
+
     years: dict = OrderedDict()
     for t in trips:
         if not t.get("started_at"):
@@ -1340,7 +1385,8 @@ def get_trips_grouped() -> list[dict]:
         dt = _local_dt(t["started_at"])
         if dt is None:
             continue
-        # ec_pending must use the RAW (UTC) started_at/ended_at — compute it before the local rewrite.
+        # ec_pending + cost rate must use the RAW (UTC) started_at — capture before the local rewrite.
+        _raw_start = t["started_at"]
         _ee = _trip_epoch(t.get("ended_at")) if t.get("ended_at") else None
         t["ec_pending"] = bool(
             _ec_on and not t.get("ec_stable") and _ec_cutoff
@@ -1362,8 +1408,12 @@ def get_trips_grouped() -> list[dict]:
 
         km  = t.get("distance_km") or 0
         eff = t.get("efficiency_kwh_100km")
+        regen = t.get("regen_kwh") or 0
+        energy = (eff * km / 100) if (eff and km) else 0
+        rate = _rate_at(t.get("vehicle_id"), _raw_start) if energy else None
+        cost = (energy * rate) if (energy and rate) else 0
         for node in [years[yr], years[yr]["months"][mo], years[yr]["months"][mo]["days"][day]]:
-            _add(node, km, eff)
+            _add(node, km, eff, regen, cost)
 
     # Compute weighted avg efficiency for every node
     for yr_node in years.values():

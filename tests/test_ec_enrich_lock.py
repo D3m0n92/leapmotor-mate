@@ -231,3 +231,102 @@ def test_lock_overrides_efficiency_and_backs_up_soc(tmp_path, monkeypatch):
     assert stable == 1 and ec_kwh == pytest.approx(1.9)
     assert eff == pytest.approx(27.1, abs=0.05)   # 1.9 / 7 km * 100
     assert eff_soc == pytest.approx(30.0)          # original SoC efficiency kept as backup
+
+
+# ── #96 regression: an INCOMPLETE cloud value must not overwrite a good estimate ──
+
+def test_convert_trip_subfloor_kept_estimate(tmp_path, monkeypatch):
+    """Issue #96: the cloud returns a value, but it's an incomplete aggregation implying an impossible
+    efficiency (< _MIN_PLAUSIBLE_EFF). The manual convert must REFUSE it and keep the SoC estimate —
+    not lock a wrong figure over the good one (the v1.34.0 bug). Mirrors the auto-sweep's floor."""
+    pdb = _setup(tmp_path, monkeypatch, age_min=120)        # trip: 7 km, SoC eff 30.0
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range",
+                        lambda b, e: _ec(0.3))               # 0.3 kWh / 7 km = 4.3 kWh/100km < 5
+    res = ec_enrich.convert_trip(1)
+    assert res["ok"] is False and res["reason"] == "implausible"
+    ec_kwh, stable, tried, eff, eff_soc = _row(pdb)
+    assert eff == pytest.approx(30.0)   # SoC estimate untouched
+    assert eff_soc is None              # no backup taken → nothing was overwritten
+    assert ec_kwh is None and stable == 0
+    assert tried == 1                   # attempt recorded
+
+
+def test_convert_trip_riri96_scenario(tmp_path, monkeypatch):
+    """Faithful #96 repro: a 33 km drive, real ≈5.8 kWh (17.5 kWh/100km); the cloud returns a partial
+    0.5 kWh (→ 1.5 kWh/100km). Convert must keep 17.5, never apply the impossible 1.5."""
+    pdb = D.Database(str(tmp_path / "t.db"))
+    monkeypatch.setattr(db_reader, "DB_PATH", str(tmp_path / "t.db"))
+    ended = datetime.now(timezone.utc) - timedelta(days=8)  # old trip, like riri19's 21 June one
+    started = ended - timedelta(minutes=29)
+    pdb._conn.execute(
+        "INSERT INTO trips (id, vehicle_id, started_at, ended_at, distance_km, efficiency_kwh_100km)"
+        " VALUES (1, 1, ?, ?, 33.0, 17.5)", (started.isoformat(), ended.isoformat()))
+    pdb._conn.commit()
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(0.5))
+    res = ec_enrich.convert_trip(1)
+    assert res["ok"] is False and res["reason"] == "implausible"
+    assert _row(pdb)[3] == pytest.approx(17.5)   # estimate preserved, not 1.5
+
+
+def test_convert_trip_low_but_consistent_with_soc_is_accepted(tmp_path, monkeypatch):
+    """The two-condition guard must NOT reject a genuinely low-consumption trip (long descent / heavy
+    regen). 50 km where SoC says ≈2.0 kWh (4 kWh/100 km); cloud getEC 1.9 kWh → implied 3.8 kWh/100 km
+    is below the floor, BUT it's 95% of the physical SoC delta → real, not incomplete → applied."""
+    pdb = D.Database(str(tmp_path / "t.db"))
+    monkeypatch.setattr(db_reader, "DB_PATH", str(tmp_path / "t.db"))
+    ended = datetime.now(timezone.utc) - timedelta(minutes=120)
+    started = ended - timedelta(minutes=40)
+    pdb._conn.execute(
+        "INSERT INTO trips (id, vehicle_id, started_at, ended_at, distance_km, efficiency_kwh_100km)"
+        " VALUES (1, 1, ?, ?, 50.0, 4.0)", (started.isoformat(), ended.isoformat()))
+    pdb._conn.commit()
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(1.9))
+    res = ec_enrich.convert_trip(1)
+    assert res["ok"] is True                       # accepted — low but consistent with the battery
+    ec_kwh, stable, _tried, eff, eff_soc = _row(pdb)
+    assert stable == 1 and ec_kwh == pytest.approx(1.9)
+    assert eff == pytest.approx(3.8, abs=0.05)     # 1.9 / 50 km * 100 — the official low figure
+    assert eff_soc == pytest.approx(4.0)           # SoC kept as backup
+
+
+def test_convert_trip_incomplete_caught_via_raw_soc_when_efficiency_missing(tmp_path, monkeypatch):
+    """Extra safety layer: even when the stored efficiency is absent (Mate withholds it on net-≤0 / very
+    short trips), the guard still catches an incomplete getEC from raw ΔSoC × battery capacity. 33 km
+    trip with NO efficiency but SoC 66.3→57.4 (≈5.8 kWh on a 65 kWh pack); cloud 0.5 kWh → rejected."""
+    pdb = D.Database(str(tmp_path / "t.db"))
+    monkeypatch.setattr(db_reader, "DB_PATH", str(tmp_path / "t.db"))
+    db_reader.set_setting("battery_capacity_kwh", "65.0")
+    ended = datetime.now(timezone.utc) - timedelta(days=8)
+    started = ended - timedelta(minutes=29)
+    pdb._conn.execute(   # efficiency_kwh_100km left NULL on purpose
+        "INSERT INTO trips (id, vehicle_id, started_at, ended_at, distance_km, start_soc, end_soc)"
+        " VALUES (1, 1, ?, ?, 33.0, 66.3, 57.4)", (started.isoformat(), ended.isoformat()))
+    pdb._conn.commit()
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(0.5))
+    res = ec_enrich.convert_trip(1)
+    assert res["ok"] is False and res["reason"] == "implausible"   # caught via raw SoC, no efficiency
+    assert _row(pdb)[1] == 0 and _row(pdb)[0] is None              # nothing applied
+
+
+# ── recovery: per-trip "Revert to estimate" ──────────────────────────────────
+
+def test_revert_trip_ec_restores_estimate(tmp_path, monkeypatch):
+    """After a conversion, revert restores the backed-up SoC efficiency, drops the EC split, clears the
+    lock and parks ec_tried so the sweep won't silently redo it — while a manual re-convert still works."""
+    pdb = _setup(tmp_path, monkeypatch, age_min=120)
+    monkeypatch.setattr(command_client, "get_energy_breakdown_range", lambda b, e: _ec(1.9))
+    assert ec_enrich.convert_trip(1)["ok"] is True
+    assert _row(pdb)[1] == 1                        # converted/locked
+    assert db_reader.revert_trip_ec(1) is True
+    ec_kwh, stable, tried, eff, _soc = _row(pdb)
+    assert eff == pytest.approx(30.0)              # SoC estimate restored
+    assert stable == 0 and ec_kwh is None
+    assert tried >= 80                             # parked past the sweep's give-up threshold
+    assert ec_enrich.convert_trip(1)["ok"] is True  # manual re-convert ignores ec_tried
+
+
+def test_revert_trip_ec_noop_when_not_converted(tmp_path, monkeypatch):
+    """Reverting a trip that was never converted (no SoC backup) does nothing and reports False."""
+    pdb = _setup(tmp_path, monkeypatch, age_min=120)
+    assert db_reader.revert_trip_ec(1) is False
+    assert _row(pdb)[3] == pytest.approx(30.0)

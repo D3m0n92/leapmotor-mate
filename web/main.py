@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.34.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.34.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -445,9 +445,22 @@ async def trip_convert_ec(request: Request, trip_id: int):
     if res.get("reason") == "merged_cloud":
         # Actionable (amber): merging the two trips would recover the data.
         return HTMLResponse(f'<span class="text-amber-400 text-xs">⚠️ {t("ec_convert_merged")}</span>')
+    if res.get("reason") == "implausible":
+        # The cloud returned a value, but it's an incomplete aggregation (would imply an impossible
+        # efficiency). Calm tone: the reliable SoC estimate above is deliberately kept, nothing broke.
+        return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ️ {t("ec_convert_implausible")}</span>')
     # Not an error — the cloud just has no per-trip detail for this (often short) trip. Calm, neutral
     # tone so it doesn't read as "something is broken": the SoC estimate above stands.
     return HTMLResponse(f'<span class="text-slate-400 text-xs">ℹ️ {t("ec_convert_nodata")}</span>')
+
+
+@app.post("/api/trips/{trip_id}/revert-ec", response_class=HTMLResponse)
+async def trip_revert_ec(request: Request, trip_id: int):
+    """'Revert to estimate' button: undo a getEC conversion, restoring the SoC estimate that was
+    backed up at convert time. Reloads the page so the original figure reappears and the Convert
+    button comes back. Recovery path for a conversion that landed on incomplete cloud data."""
+    db_reader.revert_trip_ec(trip_id)
+    return Response(status_code=200, headers={"HX-Refresh": "true"})
 
 
 @app.delete("/api/charges/{charge_id}")

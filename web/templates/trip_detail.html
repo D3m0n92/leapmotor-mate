@@ -35,7 +35,7 @@
           <div class="stat-value">{{ fmt_dur(trip.duration_min) }}</div>
         </div>
         <div>
-          <div class="stat-label">{{ t('efficiency') }}</div>
+          <div class="stat-label">{{ t('avg_efficiency') }}</div>
           {% if trip.efficiency_kwh_100km %}
           {# number big, unit small — the full "20 kWh/100km" at stat-value size wrapped on phones #}
           <div class="stat-value {% if trip.efficiency_kwh_100km < 18 %}text-green-400{% elif trip.efficiency_kwh_100km < 22 %}text-yellow-400{% else %}text-red-400{% endif %}">
@@ -83,6 +83,18 @@
         <span id="ec-convert-msg" class="ml-2"></span>
       </div>
       {% endif %}
+      {% if trip.ec_stable %}
+      <!-- Revert this trip's official-data conversion back to the SoC estimate (the value backed up
+           at convert time). Recovery path if a conversion landed on incomplete cloud data (#96). -->
+      <div class="mt-3">
+        <button type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 text-slate-300 px-3 py-1.5 text-xs font-medium hover:border-slate-400 hover:text-white"
+                hx-post="api/trips/{{ trip.id }}/revert-ec"
+                hx-confirm="{{ t('ec_revert_confirm') }}">
+          ↩ {{ t('ec_revert_btn') }}
+        </button>
+      </div>
+      {% endif %}
     </div>
     <div class="card space-y-3 text-sm">
       <div class="flex justify-between">
@@ -100,6 +112,10 @@
       <div class="flex justify-between">
         <span class="text-slate-400">{{ t('start_odometer') }}</span>
         <span class="text-white font-medium">{{ (trip.start_odometer_km or 0) | dist(0) }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-400">{{ t('end_odometer') }}</span>
+        <span class="text-white font-medium">{% if trip.end_odometer_km %}{{ trip.end_odometer_km | dist(0) }}{% else %}—{% endif %}</span>
       </div>
       <div class="flex justify-between">
         <span class="text-slate-400">{{ t('avg_speed') }}</span>

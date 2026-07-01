@@ -310,9 +310,18 @@ def get_cost_config() -> dict:
     }
 
 
+def get_dynamic_price_entity() -> str:
+    """Saved HA entity_id for the 'dynamic sensor' pricing mode, or '' if none chosen."""
+    return get_setting("dynamic_price_entity_id", "")
+
+
+def save_dynamic_price_entity(entity_id: str) -> None:
+    set_setting("dynamic_price_entity_id", (entity_id or "").strip())
+
+
 def save_cost_config(mode: str, method: str, bands: list) -> None:
     """Persist the Costs-page config. Bands are sanitised to {start,end,prices}."""
-    mode   = mode   if mode   in ("flat", "tou")   else "flat"
+    mode   = mode   if mode   in ("flat", "tou", "dynamic") else "flat"
     method = method if method in ("split", "start") else "split"
     clean = []
     for b in bands or []:
@@ -427,6 +436,60 @@ def _power_window_bounds(db, started_at, ended_at):
     return lo, hi, False
 
 
+def _dynamic_sensor_cost(charge, energy: float, base: float) -> Optional[float]:
+    """Cost from a live HA price-sensor history (Nordpool/Tibber/ENTSO-E-style dynamic
+    tariffs): integrate the charge's real power curve same as TOU 'split', but price each
+    interval by the sensor's value AT that instant (step-hold — these sensors update once
+    an hour) instead of a static band. Falls back to the flat base price whenever the sensor
+    isn't configured, HA is unreachable, or it has no history for the window (never leaves
+    a charge silently uncosted just because one live lookup failed)."""
+    entity_id = get_dynamic_price_entity()
+    if not entity_id or not charge["ended_at"]:
+        return round(energy * base, 2) if base else None
+
+    import ha_client   # local: ha_client imports db_reader, so this avoids a circular import
+    db = _get()
+    lo, hi, excl = _power_window_bounds(db, charge["started_at"], charge["ended_at"])
+    rows = db.execute(
+        "SELECT recorded_at, charge_voltage_v, charge_current_a FROM positions "
+        "WHERE charging = 1 AND recorded_at >= ? AND recorded_at " + ("<" if excl else "<=")
+        + " ? ORDER BY recorded_at",
+        (lo, hi),
+    ).fetchall()
+    samples = []
+    for r in rows:
+        dt = _local_dt(r["recorded_at"])
+        if dt is not None:
+            power = abs((r["charge_voltage_v"] or 0) * (r["charge_current_a"] or 0)) / 1000.0
+            samples.append((dt, power))
+    if len(samples) < 2:
+        return round(energy * base, 2) if base else None
+
+    price_hist = ha_client.get_history(entity_id, lo, hi)
+    if not price_hist:
+        return round(energy * base, 2) if base else None
+
+    idx, total_e, weighted = 0, 0.0, 0.0
+    for (dt0, p0), (dt1, p1) in zip(samples, samples[1:]):
+        hours = (dt1 - dt0).total_seconds() / 3600.0
+        if hours <= 0 or hours > 0.25:   # mirrors compute_cost's TOU-split gap guard
+            continue
+        e = (p0 + p1) / 2.0 * hours
+        if e <= 0:
+            continue
+        ts0 = dt0.timestamp()
+        while idx + 1 < len(price_hist) and price_hist[idx + 1][0] <= ts0:
+            idx += 1
+        total_e += e
+        weighted += e * price_hist[idx][1]
+
+    if total_e <= 0:
+        return round(energy * base, 2) if base else None
+    # scale the time-weighted average price onto the authoritative (SOC) energy, same as
+    # the TOU-split method, so the total stays consistent with the energy shown elsewhere.
+    return round(energy * (weighted / total_e), 2)
+
+
 def compute_cost(charge, config: Optional[dict] = None, ac_kwh: Optional[float] = None):
     """Cost for ONE charge using the pricing config in effect *now*. This is the
     single place a charge's cost is set, and it is frozen afterwards (no retroactive
@@ -436,6 +499,8 @@ def compute_cost(charge, config: Optional[dict] = None, ac_kwh: Optional[float] 
         TOU 'start' → price of the band matching the start day+time (else base)
         TOU 'split' → energy split across bands by the real power curve, each
                       sample priced by the band matching its own day+time
+        dynamic     → same power-curve split as TOU 'split', priced by a live HA
+                      sensor's history instead of a static band (see _dynamic_sensor_cost)
 
     `ac_kwh`: for HOME charges on a configured wallbox, the caller passes the real AC energy the
     wallbox delivered (what you actually pay the utility, incl. AC→DC conversion losses). When given
@@ -459,6 +524,9 @@ def compute_cost(charge, config: Optional[dict] = None, ac_kwh: Optional[float] 
     key = PRICE_KEYS.get(location_type, "")
     base_set = key in prices
     base = float(prices.get(key, 0.0) or 0.0)
+
+    if config.get("mode") == "dynamic":
+        return _dynamic_sensor_cost(charge, energy, base)
 
     bands = config.get("bands") or []
     if config.get("mode") != "tou" or not bands:

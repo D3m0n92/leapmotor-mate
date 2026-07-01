@@ -112,6 +112,19 @@ def test_connection() -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def _fetch_states() -> list[dict]:
+    """Raw /api/states body, or [] on any failure/misconfiguration. Shared by every
+    entity-discovery helper (wallbox, dynamic price, …) so each is a pure filter over
+    one bulk fetch instead of its own HTTP round-trip."""
+    if not is_configured():
+        return []
+    try:
+        status, body = _request("/api/states")
+    except Exception:  # noqa: BLE001
+        return []
+    return body if status == 200 and isinstance(body, list) else []
+
+
 def list_entities(only_wallbox: bool = True) -> list[dict]:
     """Return entities as {entity_id, name, state, unit, device_class}.
 
@@ -119,15 +132,7 @@ def list_entities(only_wallbox: bool = True) -> list[dict]:
     or whose device_class is power/energy/current/voltage. Name matches are
     ranked first so the user's actual wallbox surfaces at the top of the list.
     """
-    if not is_configured():
-        return []
-    try:
-        status, body = _request("/api/states")
-    except Exception:  # noqa: BLE001
-        return []
-    if status != 200 or not isinstance(body, list):
-        return []
-
+    body = _fetch_states()
     out: list[dict] = []
     custom_kw = _parse_wb_keywords()          # one settings read for the whole scan
     keywords = custom_kw or _WB_KEYWORDS
@@ -151,6 +156,41 @@ def list_entities(only_wallbox: bool = True) -> list[dict]:
             "unit": unit,
             "device_class": dclass,
             "_rank": (0 if kw_match else 1, dclass or "zzz", eid),
+        })
+    out.sort(key=lambda e: e.pop("_rank"))
+    return out
+
+
+# Entities likely to be a dynamic/spot electricity price (Nordpool, Tibber, ENTSO-E, a
+# utility's own integration, or a manual input_number some users drive from an automation).
+_PRICE_KEYWORDS = ("price", "prezzo", "tariff", "tariffa", "nordpool", "tibber", "entsoe",
+                   "spot", "energy_price", "elpris", "strompreis")
+_PRICE_UNITS = {"eur/kwh", "€/kwh", "ct/kwh", "cent/kwh", "usd/kwh", "gbp/kwh", "öre/kwh"}
+
+
+def list_price_entities() -> list[dict]:
+    """Candidate electricity-price entities for the dynamic pricing mode: sensor/input_number
+    entities whose id/name matches a price keyword, or whose unit is a per-kWh currency (the
+    strongest, language-independent signal — a Nordpool/Tibber/ENTSO-E sensor always reports one).
+    Keyword matches are ranked first, same convention as list_entities()."""
+    body = _fetch_states()
+    out: list[dict] = []
+    for st in body:
+        eid = st.get("entity_id", "")
+        domain = eid.split(".", 1)[0]
+        if domain not in ("sensor", "input_number", "number"):
+            continue
+        attrs = st.get("attributes", {}) or {}
+        name = attrs.get("friendly_name") or eid
+        unit = attrs.get("unit_of_measurement", "")
+        hay = f"{eid} {name}".lower()
+        kw_match = any(k in hay for k in _PRICE_KEYWORDS)
+        unit_match = unit.strip().lower() in _PRICE_UNITS
+        if not (kw_match or unit_match):
+            continue
+        out.append({
+            "entity_id": eid, "name": name, "state": st.get("state", ""), "unit": unit,
+            "_rank": (0 if kw_match else 1, eid),
         })
     out.sort(key=lambda e: e.pop("_rank"))
     return out

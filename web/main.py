@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.36.2"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "2.0.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -1704,6 +1704,25 @@ async def save_cost_tou(request: Request):
     cfg = db_reader.get_cost_config()
     db_reader.save_cost_config(cfg["mode"], form.get("tou_method", "split"), bands)
     # NOTE: recomputing existing charge costs from the bands is the next step.
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
+
+
+@app.get("/api/costs/dynamic-entities", response_class=HTMLResponse)
+async def dynamic_price_entities(request: Request):
+    """Lazy-loaded picker for the dynamic-pricing sensor: candidate HA entities (price
+    keyword or a per-kWh currency unit), pre-selected with the saved choice if any."""
+    entities = ha_client.list_price_entities()
+    return templates.TemplateResponse(request, "partials/dynamic_price_entities.html", _ctx(
+        entities=entities, selected=db_reader.get_dynamic_price_entity(),
+    ))
+
+
+@app.post("/api/costs/dynamic", response_class=HTMLResponse)
+async def save_cost_dynamic(request: Request):
+    """Save the chosen dynamic-price sensor entity."""
+    form = await request.form()
+    db_reader.save_dynamic_price_entity(form.get("dynamic_price_entity", ""))
     t = i18n.get_t(db_reader.get_language())
     return HTMLResponse(f'<span style="color:#22c55e;font-size:13px">{t("costs_saved")}</span>')
 

@@ -27,9 +27,9 @@
   <div class="card">
     <h2 class="font-semibold text-white mb-3">{{ t('cost_mode') }}</h2>
     <form hx-post="api/costs/mode" hx-trigger="change" hx-target="#mode-feedback" hx-swap="innerHTML">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label class="flex items-start gap-3 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
-          <input type="radio" name="cost_mode" value="flat" {% if cost_mode != 'tou' %}checked{% endif %}
+          <input type="radio" name="cost_mode" value="flat" {% if cost_mode not in ('tou', 'dynamic') %}checked{% endif %}
                  onchange="setMode('flat')" class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
           <div>
             <div class="text-sm font-semibold text-white">{{ t('cost_mode_flat') }}</div>
@@ -42,6 +42,14 @@
           <div>
             <div class="text-sm font-semibold text-white">{{ t('cost_mode_tou') }}</div>
             <div class="text-xs text-slate-400">{{ t('cost_mode_tou_desc') }}</div>
+          </div>
+        </label>
+        <label class="flex items-start gap-3 bg-slate-950 rounded-xl p-3 border border-slate-800 cursor-pointer hover:border-slate-600">
+          <input type="radio" name="cost_mode" value="dynamic" {% if cost_mode == 'dynamic' %}checked{% endif %}
+                 onchange="setMode('dynamic')" class="mt-0.5 w-4 h-4 accent-brand flex-shrink-0">
+          <div>
+            <div class="text-sm font-semibold text-white">{{ t('cost_mode_dynamic') }}</div>
+            <div class="text-xs text-slate-400">{{ t('cost_mode_dynamic_desc') }}</div>
           </div>
         </label>
       </div>
@@ -66,6 +74,7 @@
     <p class="text-xs text-slate-400 mb-4">
       {{ t('charge_prices_desc') }}
       <span id="base-note" class="{% if cost_mode != 'tou' %}hidden{% endif %}">{{ t('cost_base_note') }}</span>
+      <span id="base-note-dynamic" class="{% if cost_mode != 'dynamic' %}hidden{% endif %}">{{ t('cost_dynamic_base_note') }}</span>
     </p>
 
     <form hx-post="api/settings/prices" hx-target="#prices-feedback" hx-swap="innerHTML" style="margin:0">
@@ -170,6 +179,16 @@
     </form>
   </div>
 
+  <!-- ── Dynamic price sensor (visible only in dynamic mode) ──────────── -->
+  <div id="dynamic-section" class="card {% if cost_mode != 'dynamic' %}hidden{% endif %}">
+    <h2 class="font-semibold text-white mb-1">{{ t('dyn_price_title') }}</h2>
+    <p class="text-xs text-slate-400 mb-1">{{ t('dyn_price_desc') }}</p>
+    <div id="dyn-picker-wrap"
+         {% if cost_mode == 'dynamic' %}hx-get="api/costs/dynamic-entities" hx-trigger="load" hx-swap="innerHTML"{% endif %}>
+      <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -203,6 +222,15 @@
     document.getElementById('tou-section').classList.toggle('hidden', mode !== 'tou');
     const note = document.getElementById('base-note');
     if (note) note.classList.toggle('hidden', mode !== 'tou');
+    const dynSection = document.getElementById('dynamic-section');
+    dynSection.classList.toggle('hidden', mode !== 'dynamic');
+    const dynNote = document.getElementById('base-note-dynamic');
+    if (dynNote) dynNote.classList.toggle('hidden', mode !== 'dynamic');
+    // Load the sensor picker the first time the user switches INTO dynamic mode — it needs
+    // a live HA call, so it's never fetched for flat/TOU users just visiting this page.
+    if (mode === 'dynamic') {
+      htmx.ajax('GET', 'api/costs/dynamic-entities', {target: '#dyn-picker-wrap', swap: 'innerHTML'});
+    }
   }
 
   function mkInput(type, value, extraCls, attrs) {

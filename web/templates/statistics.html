@@ -98,6 +98,11 @@
 {% endif %}
 
 {% if ec_periods and not demo %}
+<!-- Consumo di guida dall'ultima ricarica completata (cloud getEC, dato ufficiale) -->
+<div class="card mb-6" hx-get="api/energy-since-charge" hx-trigger="load" hx-swap="innerHTML">
+  <div class="text-center py-4 text-slate-500 text-sm">{{ t('loading') }}…</div>
+</div>
+
 <!-- Consumo di guida per intervallo a scelta (unità = giorno solare; via getEC, dato ufficiale) -->
 <div class="card mb-6">
   <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">

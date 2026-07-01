@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "1.36.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "1.36.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -2565,6 +2565,37 @@ async def energy_period(request: Request, period: str = "", start: str = "", end
         # Never cache a None: a transient cloud miss must not poison the slot for 30 min — the next
         # load retries. Keep the last good value if this fetch missed. (Genuinely-empty windows just
         # re-query each load; that's rare and correct.)
+        if data is not None:
+            _period_cache[key] = {"data": data, "ts": time.time()}
+        eb = data if data is not None else (c["data"] if c else None)
+    else:
+        eb = c["data"]
+    return templates.TemplateResponse(request, "partials/energy_breakdown.html",
+                                      _ctx(eb=eb, eb_label=label))
+
+
+@app.get("/api/energy-since-charge", response_class=HTMLResponse)
+async def energy_since_charge(request: Request, refresh: int = 0):
+    """Driving energy split (getEC) for the window [end of the last completed charge, now] —
+    i.e. everything driven since the battery was last topped up. Same live cloud query +
+    partial as the day/week/month/alltime period views, just with the charge's end as the
+    lower bound instead of a calendar boundary. Cached 30 min, keyed to that end timestamp so
+    a newly-finished charge starts a fresh window automatically (no stale cache to clear)."""
+    import time, asyncio
+    from datetime import datetime, timezone
+    t = i18n.get_t(db_reader.get_language())
+    last_charge_end = db_reader.get_last_charge_end()
+    if last_charge_end is None:
+        return templates.TemplateResponse(request, "partials/energy_breakdown.html",
+                                          _ctx(eb=None, eb_label=t("ec_since_charge_title")))
+    now = datetime.now(timezone.utc).astimezone(db_reader._LOCAL_TZ)
+    begin_ts, end_ts = int(last_charge_end.timestamp()), int(now.timestamp())
+    label = f"{t('ec_since_charge_title')} · {last_charge_end.strftime('%d/%m %H:%M')}"
+    key = f"p:sincecharge:{begin_ts}"
+    c = _period_cache.get(key)
+    if refresh or not c or time.time() - c["ts"] >= 1800:
+        data = await asyncio.get_event_loop().run_in_executor(
+            None, command_client.get_energy_breakdown_range, begin_ts, end_ts)
         if data is not None:
             _period_cache[key] = {"data": data, "ts": time.time()}
         eb = data if data is not None else (c["data"] if c else None)

@@ -1721,6 +1721,16 @@ def get_charges(limit: int = 50) -> list[dict]:
     return out
 
 
+def get_last_charge_end() -> Optional[datetime]:
+    """End time of the most recently COMPLETED charge (local-tz aware), or None if no
+    charge has ever finished. Used to bound the "since last charge" getEC window."""
+    db = _get()
+    row = db.execute(
+        "SELECT ended_at FROM charges WHERE ended_at IS NOT NULL ORDER BY ended_at DESC LIMIT 1"
+    ).fetchone()
+    return _local_dt(row["ended_at"]) if row else None
+
+
 def get_charge_power_curve(charge_id: int) -> dict:
     """Per-sample charging power for one session, for the expandable power chart.
     Power = |pack_voltage(1177) x pack_current(1178)| / 1000 — the same value as the

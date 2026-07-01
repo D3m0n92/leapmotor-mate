@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.36.1] — 2026-07-01
+
+### Added
+- **"Since last charge" driving energy card (Statistics page).** Shows the official cloud consumption split (Driving / A/C / Other) for everything driven since the end of your last completed charge — same live figure as the day/week/month/all-time cards, just anchored to your last charge instead of a calendar period.
+
 ## [1.36.0] — 2026-06-30
 
 ### Added

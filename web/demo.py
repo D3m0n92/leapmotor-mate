@@ -94,4 +94,5 @@ def vehicle_status(db_reader) -> dict:
         "windows": {"fl": ob(s.get("windows_open")), "fr": False, "rl": False, "rr": False,
                     "sunshade": False},
         "temps": {"battery": s.get("battery_min_temp"), "cabin": s.get("inside_temp")},
+        "climate": {"on": False, "mode": None, "fan": None, "recirc": None},
     }

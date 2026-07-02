@@ -1,0 +1,269 @@
+﻿    <!-- ABRP (A Better Route Planner) -->
+    {% call scard('abrp', t('abrp_section'), card_open.get('abrp'), 'api/settings/abrp/status') %}
+      <p class="text-xs text-slate-400 mb-4">{{ t('abrp_desc') }}</p>
+      <form hx-post="api/settings/abrp" hx-target="#abrp-feedback" hx-swap="innerHTML" class="space-y-3">
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <span class="text-sm text-white">{{ t('abrp_enable') }}</span>
+          <input type="checkbox" name="abrp_enabled" value="1"
+                 {% if settings.get('abrp_enabled') == '1' %}checked{% endif %}
+                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
+        </label>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('abrp_token_label') }}</label>
+          <input type="password" name="abrp_token"
+                 placeholder="{% if settings.get('abrp_token_set') %}••••••••{% endif %}"
+                 autocomplete="off" spellcheck="false"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                        text-sm font-mono focus:outline-none focus:border-brand">
+          <div class="text-[11px] text-slate-500 mt-1">{{ t('abrp_token_hint') }}</div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div id="abrp-feedback" class="text-xs"></div>
+          <button type="submit"
+                  class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
+            {{ t('abrp_save') }}
+          </button>
+        </div>
+      </form>
+    {% endcall %}
+
+    <!-- Geocoder (Navigation address lookup) -->
+    {% call scard('geocoder', t('geocoder_section'), card_open.get('geocoder')) %}
+      <p class="text-xs text-slate-400 mb-4">{{ t('geocoder_desc') }}</p>
+      <form hx-post="api/settings/geocoder" hx-target="#geocoder-feedback" hx-swap="innerHTML" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_provider_label') }}</label>
+          <select name="geocoder_provider"
+                  class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                         text-sm focus:outline-none focus:border-brand cursor-pointer">
+            {% set gp = settings.get('geocoder_provider', '') %}
+            <option value=""          {% if gp == '' %}selected{% endif %}>{{ t('geocoder_none') }}</option>
+            <option value="geoapify"  {% if gp == 'geoapify' %}selected{% endif %}>Geoapify ({{ t('geocoder_recommended') }})</option>
+            <option value="locationiq"{% if gp == 'locationiq' %}selected{% endif %}>LocationIQ</option>
+            <option value="tomtom"    {% if gp == 'tomtom' %}selected{% endif %}>TomTom</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('geocoder_key_label') }}</label>
+          <input type="password" name="geocoder_key"
+                 autocomplete="off" spellcheck="false" placeholder="{% if settings.get('geocoder_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                        text-sm font-mono focus:outline-none focus:border-brand">
+          <div class="text-[11px] text-slate-500 mt-1">{{ t('geocoder_key_hint') }}</div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div id="geocoder-feedback" class="text-xs"></div>
+          <button type="submit"
+                  class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
+            {{ t('geocoder_save') }}
+          </button>
+        </div>
+      </form>
+    {% endcall %}
+
+    <!-- Charging-station labels (📍 on charges — idea: @hubcasale PR #48) -->
+    {% call scard('charger_locator', '⚡ ' + t('charger_locator_section'), card_open.get('charger_locator'), new_badge=(t('badge_new') if 'charger_locator' in new_sections else '')) %}
+      <p class="text-xs text-slate-400 mb-4">{{ t('charger_locator_desc') }}</p>
+      <form hx-post="api/settings/charger-locator" hx-trigger="change"
+            hx-target="#charger-locator-feedback" hx-swap="innerHTML">
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <div class="text-sm text-white">{{ t('charger_locator_enable') }}</div>
+            <div class="text-xs text-slate-400">{{ t('charger_locator_enable_desc') }}</div>
+          </div>
+          <input type="checkbox" name="charger_locator" value="1"
+                 {% if settings.charger_locator == "1" %}checked{% endif %}
+                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
+        </label>
+        <div class="mt-4 pt-4 border-t border-slate-700">
+          <label class="block text-xs text-slate-400 mb-1">{{ t('charger_locator_ocm_label') }}</label>
+          <input type="password" name="charger_locator_ocm_key"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="{% if settings.get('charger_locator_ocm_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                        text-sm font-mono focus:outline-none focus:border-brand">
+          <div class="text-[11px] text-slate-500 mt-1">{{ t('charger_locator_ocm_hint') }}</div>
+        </div>
+        <div class="mt-3">
+          <label class="block text-xs text-slate-400 mb-1">{{ t('charger_locator_tomtom_label') }}</label>
+          <input type="password" name="charger_locator_tomtom_key"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="{% if settings.get('charger_locator_tomtom_key_set') %}••••••••{% else %}{{ t('geocoder_key_ph') }}{% endif %}"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                        text-sm font-mono focus:outline-none focus:border-brand">
+          <div class="text-[11px] text-slate-500 mt-1">{{ t('charger_locator_tomtom_hint') }}</div>
+        </div>
+        <div id="charger-locator-feedback" class="text-xs mt-2" style="min-height:16px"></div>
+      </form>
+    {% endcall %}
+
+    <!-- Wallbox -->
+    {% call scard('wallbox', t('wallbox_section'), card_open.get('wallbox'), 'api/wallbox/status' if wallbox_enabled else '') %}
+      <form hx-post="api/settings/wallbox" hx-trigger="change">
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <div class="text-sm text-white">{{ t('wallbox_enable') }}</div>
+            <div class="text-xs text-slate-400">{{ t('wallbox_enable_desc') }}</div>
+          </div>
+          <input type="checkbox" name="wallbox_enabled" value="1"
+                 {% if wallbox_enabled %}checked{% endif %}
+                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
+        </label>
+      </form>
+
+      {% if wallbox_enabled %}
+      <form hx-post="api/settings/wallbox-auto-home" hx-trigger="change"
+            hx-target="#wb-auto-home-result" hx-swap="innerHTML"
+            class="mt-4 pt-4 border-t border-slate-700">
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <div>
+            <div class="text-sm text-white">{{ t('wallbox_auto_home') }}</div>
+            <div class="text-xs text-slate-400">{{ t('wallbox_auto_home_desc') }}</div>
+          </div>
+          <input type="checkbox" name="wallbox_auto_home" value="1"
+                 {% if settings.wallbox_auto_home == "1" %}checked{% endif %}
+                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
+        </label>
+        <div id="wb-auto-home-result" class="text-xs mt-1 h-4"></div>
+      </form>
+
+      <div class="mt-5 pt-5 border-t border-slate-700">
+        {% if not ha_supervisor %}
+        <form hx-post="api/settings/ha" hx-target="#ha-test-result" hx-swap="innerHTML" class="space-y-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">{{ t('ha_url_label') }}</label>
+            <input type="text" name="ha_url" value="{{ ha_url }}" placeholder="http://192.168.1.10:8123"
+                   autocomplete="off" spellcheck="false"
+                   class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                          text-sm font-mono focus:outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">{{ t('ha_token_label') }}</label>
+            <input type="password" name="ha_token"
+                   placeholder="{% if ha_has_token %}•••••••••••••••• ({{ t('ha_token_set') }}){% endif %}"
+                   autocomplete="off" spellcheck="false"
+                   class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                          text-sm font-mono focus:outline-none focus:border-brand">
+            <div class="text-[11px] text-slate-500 mt-1">{{ t('ha_token_hint') }}</div>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <div id="ha-test-result" class="text-xs"
+                 {% if ha_has_token %}hx-get="api/wallbox/test" hx-trigger="load" hx-swap="innerHTML"{% endif %}></div>
+            <button type="submit"
+                    class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2 flex-shrink-0">
+              {{ t('ha_test') }}
+            </button>
+          </div>
+        </form>
+        {% endif %}
+
+        <!-- Keywords for filtering wallbox entities -->
+        <form hx-post="api/settings/wallbox-keywords" hx-trigger="change" hx-target="#wb-keywords-result" hx-swap="innerHTML" class="mt-4">
+          <div>
+            <label class="block text-sm text-white mb-2">{{ t('wb_keywords_label') }}</label>
+            <input type="text" name="wb_keywords" value="{{ wb_keywords }}"
+                   placeholder="wallbox, charger, evse, keba, pulsar"
+                   spellcheck="false"
+                   class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white
+                          text-sm focus:outline-none focus:border-brand">
+            <div class="text-[11px] text-slate-500 mt-1">{{ t('wb_keywords_hint') }}</div>
+          </div>
+          <div id="wb-keywords-result" class="text-xs mt-2"></div>
+        </form>
+
+        {% if ha_supervisor or ha_has_token %}
+        <!-- Sensor list: expandable -->
+        <details class="mt-4 group" open>
+          <summary class="cursor-pointer select-none text-sm font-medium text-white flex items-center gap-2"
+                   style="list-style:none">
+            <span class="group-open:rotate-90 text-slate-500 text-xs"
+                  style="transition:transform .2s;display:inline-block">▶</span>
+            {{ t('wb_entities_title') }}
+          </summary>
+          <div hx-get="api/wallbox/entities" hx-trigger="load" hx-swap="outerHTML" class="mt-3">
+            <div class="text-xs text-slate-500">…</div>
+          </div>
+        </details>
+        {% endif %}
+      </div>
+
+      <!-- Saved wallbox profiles -->
+      <div class="mt-5 pt-5 border-t border-slate-700">
+        <div class="text-sm font-medium text-white mb-1">{{ t('wb_profiles_title') }}</div>
+        <div class="text-[11px] text-slate-500 mb-3">{{ t('wb_profile_save_hint') }}</div>
+        <div hx-get="api/settings/wallbox-profiles" hx-trigger="load" hx-swap="outerHTML"
+             class="text-xs text-slate-500">…</div>
+      </div>
+
+      {% endif %}
+    {% endcall %}
+
+    <!-- MQTT → Home Assistant -->
+    {% call scard('mqtt', t('mqtt_section'), card_open.get('mqtt'), 'api/settings/mqtt/status') %}
+      <p class="text-xs text-slate-400 mb-4">{{ t('mqtt_desc') }}</p>
+      <form hx-post="api/settings/mqtt" hx-target="#mqtt-feedback" hx-swap="innerHTML" class="space-y-3">
+        <label class="flex items-center justify-between gap-3 cursor-pointer">
+          <span class="text-sm text-white">{{ t('mqtt_enable') }}</span>
+          <input type="checkbox" name="mqtt_enabled" value="1"
+                 {% if settings.get('mqtt_enabled') == '1' %}checked{% endif %}
+                 class="w-5 h-5 accent-brand cursor-pointer flex-shrink-0">
+        </label>
+
+        {% set inp = "w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm focus:outline-none focus:border-brand" %}
+        <div class="space-y-3">
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-xs text-slate-400 mb-1">{{ t('mqtt_broker') }}</label>
+              <input type="text" name="mqtt_broker" value="{{ settings.get('mqtt_broker', '') }}"
+                     placeholder="192.168.1.10" autocomplete="off" class="{{ inp }} font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">{{ t('mqtt_port') }}</label>
+              <input type="text" name="mqtt_port" value="{{ settings.get('mqtt_port', '1883') }}" class="{{ inp }} font-mono">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">{{ t('mqtt_user') }}</label>
+              <input type="text" name="mqtt_user" value="{{ settings.get('mqtt_user', '') }}" autocomplete="off" class="{{ inp }}">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">{{ t('mqtt_pass') }}</label>
+              <input type="password" name="mqtt_pass" placeholder="{% if settings.get('mqtt_pass_set') %}••••••••{% endif %}" autocomplete="off" class="{{ inp }}">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">{{ t('mqtt_prefix') }}</label>
+            <input type="text" name="mqtt_prefix" value="{{ settings.get('mqtt_prefix', 'leapmotor') }}" class="{{ inp }} font-mono">
+          </div>
+          <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="mqtt_discovery" value="1"
+                     {% if settings.get('mqtt_discovery', '1') == '1' %}checked{% endif %} class="accent-brand"> {{ t('mqtt_discovery') }}</label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="mqtt_tls" value="1"
+                     {% if settings.get('mqtt_tls') == '1' %}checked{% endif %} class="accent-brand"> TLS</label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="mqtt_tls_insecure" value="1"
+                     {% if settings.get('mqtt_tls_insecure') == '1' %}checked{% endif %} class="accent-brand"> {{ t('mqtt_tls_insecure') }}</label>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div id="mqtt-feedback" class="text-xs"></div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button type="button"
+                    hx-post="api/settings/mqtt/test" hx-include="closest form"
+                    hx-target="#mqtt-feedback" hx-swap="innerHTML"
+                    hx-indicator="#mqtt-feedback"
+                    class="border border-slate-600 text-slate-200 text-sm font-medium rounded-lg px-4 py-2 hover:border-brand">
+              {{ t('mqtt_test') }}
+            </button>
+            <button type="submit"
+                    class="bg-brand text-white text-sm font-semibold rounded-lg px-4 py-2">
+              {{ t('mqtt_save') }}
+            </button>
+          </div>
+        </div>
+      </form>
+    {% endcall %}
+

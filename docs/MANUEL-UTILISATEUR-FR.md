@@ -243,6 +243,11 @@ capteur de courant de la voiture — une petite charge de ~10 W reste invisible)
   **répartition** apparaît dans le détail. Les trajets plus anciens ont un bouton **« Convertir avec les
   données officielles »**. Si le cloud n'a pas la donnée d'un trajet (cela arrive, sur toute voiture
   connectée), l'**estimation** reste — ce n'est pas une erreur. **Toujours actif**, sans configuration.
+- **Votre note + tags de conduite 🆕** (#107) — dans le détail d'un trajet, vous pouvez écrire une **note
+  libre** (trafic, météo, type de route, toute remarque) et indiquer le **mode de conduite** (Confort /
+  Normal / Sport) et le **One-Pedal** (activé/désactivé) utilisés. Mate ne peut pas les lire depuis la
+  voiture — Leapmotor ne les envoie pas au cloud — vous les renseignez donc à la main ; ils aident à
+  expliquer pourquoi deux conduites semblables ont consommé différemment.
 
 ### Carte
 **(menu : Carte)** — La position de la voiture sur la carte. Elle affiche la dernière position connue ; si la
@@ -260,6 +265,9 @@ maximale**, **type** et **coût**, avec le **€/kWh effectif** bien en évidenc
   **saisir à la main le total réellement payé** ; cette valeur remplace l'estimation automatique.
 - Même les recharges effectuées pendant que la voiture était éteinte/hors ligne sont **reconstruites** à
   partir du saut de pourcentage de charge.
+- **Votre note 🆕** (#107) — chaque recharge a une **note libre** (juste au-dessus de *Supprimer la
+  recharge*) pour ce que les chiffres ne capturent pas : l'emplacement de la borne, ombre/abri, sa
+  fiabilité, les conditions de stationnement, la météo, toute remarque personnelle.
 
 ### Prix de recharge
 **(menu : Prix de recharge)** — Ici, vous définissez **combien vous payez l'énergie**, afin que Mate puisse
@@ -347,6 +355,24 @@ quand même (cela dépend de la couverture/de la veille de la voiture).
 **(menu : Préparer le véhicule)** — La fonction « **préparer la voiture en un geste** » : amène l'habitacle à
 la température souhaitée (et les fonctions associées) **tout de suite** ou à une **heure programmée**. Vous
 pouvez aussi tout éteindre.
+
+**🆕 Automatique au démarrage** — Au lieu d'appuyer sur le bouton à chaque fois, vous pouvez laisser Mate
+exécuter la préparation **tout seul dès que la voiture passe en Ready** (mise sous tension). Activez
+**Automatique au démarrage**, choisissez une fois ce qu'elle doit faire — préréglage de climatisation et
+température souhaitée, ouverture des vitres, **ventilation ou chauffage** des sièges conducteur/passager,
+chauffage du volant et des rétroviseurs — puis enregistrez.
+
+Vous pouvez ajouter une **condition facultative sur la température intérieure** : exécuter la préparation
+**seulement si l'habitacle est supérieur à** une valeur (p. ex. pré-refroidir uniquement au-dessus de
+25 °C) **ou seulement s'il est inférieur à** une autre (p. ex. préchauffer uniquement en dessous de 5 °C).
+**Laissez la condition désactivée et elle s'exécute à chaque démarrage**, quelle que soit la température.
+Deux choses à savoir : elle regarde la température **intérieure** (la voiture ne fournit pas l'extérieure)
+et elle est décidée **une seule fois, à l'instant où vous démarrez la voiture** — donc si l'habitacle
+change plus tard pendant le trajet, elle ne se relance pas une deuxième fois.
+
+Elle s'exécute **une fois par démarrage** (elle ne se répète pas tant que vous restez allumé, ni pour un
+trajet ultérieur dans la même session), ignore les brefs parasites du signal et ne se relance jamais
+simplement parce que Mate a redémarré.
 
 ### Navigation
 **(menu : Navigation)** — *Envoyer une destination au GPS de la voiture* et **trouver les bornes à proximité**.

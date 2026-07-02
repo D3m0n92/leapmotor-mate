@@ -235,6 +235,10 @@ duration, consumption (kWh/100 km), energy recovered** in braking and the estima
     before you started driving. If you **never switch the car off between two trips** (you stop, stay in
     Park, drive again), the cloud counts them as **one** session — Mate tells you to **merge the two
     trips** to get the real combined consumption.
+- **Your note + driving tags 🆕** (#107) — in a trip's detail you can jot a **free-text note** (traffic,
+  weather, road type, any remark) and tag the **drive mode** (Comfort / Normal / Sport) and **One-Pedal**
+  (on/off) you used. Mate can't read these from the car — Leapmotor doesn't send them to the cloud — so
+  you set them by hand; they help explain why two otherwise similar drives consumed differently.
 
 ### Map
 **(menu: Map)** — The car's position on a map. It shows the last known position; if the latest data
@@ -253,6 +257,9 @@ label:
   estimate.
 - Charges that happened while the car was off/offline are **reconstructed** too, from the jump in the
   state of charge.
+- **Your note 🆕** (#107) — each charge has a **free-text note** (just above *Delete charge*) for the
+  things the numbers don't capture: where the station was, shade/shelter, how reliable it is, parking
+  conditions, weather, any personal remark.
 
 ### Charge Prices
 **(menu: Charge Prices)** — Here you set **how much you pay for energy**, so Mate can calculate the
@@ -333,6 +340,21 @@ through anyway (it depends on the car's coverage/standby).
 **(menu: Prepare car)** — The "**pre-condition your car with one touch**" function: it brings the
 cabin to the desired temperature (and the related functions) **right now** or at a **scheduled time**.
 You can also turn everything off.
+
+**🆕 Automatic on power-on** — Instead of tapping the button every time, you can let Mate run the
+preparation **by itself the moment the car goes Ready** (powered on). Turn on **Automatic on power-on**,
+choose once what it should do — climate preset and target temperature, how far to open the windows,
+driver/passenger seat **heating or ventilation**, heated steering and mirrors — and save.
+
+You can add an **optional condition on the interior temperature**: run the preparation **only when the
+cabin is above** a value (e.g. pre-cool only when it's over 25 °C) **or only when it's below** one (e.g.
+pre-heat only when it's under 5 °C). **Leave the condition off and it runs on every power-on**, whatever
+the temperature. Two things to know about the condition: it looks at the **interior** temperature (the
+car reports no outside temperature), and it's decided **once, at the instant you turn the car on** — so
+if the cabin changes later during the drive, it won't fire a second time.
+
+It runs **once per power-on** (it won't repeat while you stay on, or for a later trip in the same
+driving session), it ignores brief signal glitches, and it never re-fires just because Mate restarted.
 
 ### Navigation
 **(menu: Navigation)** — *Send a destination to the car's navigation* and **find nearby charging

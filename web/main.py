@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "2.0.0"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "2.0.1"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -2538,9 +2538,21 @@ _period_cache: dict = {}
 def _enrich_eb_with_trip_totals(eb: "dict | None", begin_ts: int, end_ts: int) -> "dict | None":
     """Add local distance/duration/average-kWh-per-100km to a getEC breakdown, computed from
     trips in the SAME window — mirrors the car's own "since last charge" screen (Distanza/Durata/
-    Media shown next to the same Guida/AC/Altro split). No-op when there's no energy to average."""
+    Media shown next to the same Guida/AC/Altro split). No-op when there's no energy to average.
+
+    Guard (GitHub #105): the cloud getEC total covers the car's WHOLE life, Mate's trips table
+    only starts at install. A window that begins before the first recorded trip would pair
+    all-of-the-car's energy with a fraction of its distance → a nonsense average (177.7 kWh/100km
+    in the report). For such windows the split is returned WITHOUT distance/duration/average;
+    `trips_since` carries the first-trip date so the template can say why. 1 day of slack keeps
+    the Trips-page all-time card (window begins at the first trip's local midnight) enriched."""
     if not eb or not eb.get("total_kwh"):
         return eb
+    first_ts = db_reader.get_first_trip_ts()
+    if first_ts is not None and begin_ts < first_ts - 86400:
+        from datetime import datetime
+        d = datetime.fromtimestamp(first_ts, tz=db_reader._LOCAL_TZ)
+        return {**eb, "trips_since": d.strftime("%d/%m/%Y")}
     tot = db_reader.get_trip_totals_between(begin_ts, end_ts)
     dist_km = tot.get("distance_km") or 0
     eb = {**eb, "distance_km": dist_km, "duration_min": tot.get("duration_min") or 0}

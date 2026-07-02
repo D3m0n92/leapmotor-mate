@@ -3,6 +3,11 @@
 All notable changes to LeapMotor Mate are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] — 2026-07-02
+
+### Fixed
+- **No more impossible average consumption on driving-energy windows that start before Mate was installed** (#105, thanks @riri19 for the report). The official cloud figure covers the car's whole life, but Mate's local trip history only starts at install — pairing the two on the "Since the beginning" preset (or any custom range starting earlier than your first recorded trip) produced a meaningless kWh/100km. Such windows now show the official energy split alone, with a note giving the date your local trip stats begin; ranges fully covered by Mate keep the Distance/Duration/Average row as before.
+
 ## [2.0.0] — 2026-07-01
 
 ### Added

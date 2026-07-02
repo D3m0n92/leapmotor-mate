@@ -1633,6 +1633,17 @@ def get_first_trip_date() -> Optional[str]:
     return (_local_iso(r["m"]) or r["m"])[:10]
 
 
+def get_first_trip_ts() -> Optional[int]:
+    """Epoch seconds of the earliest recorded trip's start — the lower bound of Mate's LOCAL trip
+    coverage. Cloud getEC windows can reach back to the car's first day (long before Mate was
+    installed), so callers pairing local trip totals with a getEC total use this to detect when
+    the two do NOT cover the same span (GitHub #105). None if there are no trips yet."""
+    db = _get()
+    r = db.execute("SELECT MIN(started_at) AS m FROM trips WHERE started_at IS NOT NULL").fetchone()
+    dt = _local_dt(r["m"]) if r else None
+    return int(dt.timestamp()) if dt else None
+
+
 def _wac_blend(charges) -> Optional[float]:
     """Weighted-average-cost blended €/kWh of the battery after a chronological list of PRICED
     charges (GitHub #53). Pure (no DB) so it's simulation/unit-testable: each item is a dict with

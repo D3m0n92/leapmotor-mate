@@ -25,7 +25,7 @@ import mqtt_check
 import auth
 import update_check
 
-MATE_VERSION = "2.0.2"  # bump together with the git tag + add-on config.yaml at release
+MATE_VERSION = "2.1.0"  # bump together with the git tag + add-on config.yaml at release
 
 import diagnostics
 import demo
@@ -467,6 +467,20 @@ async def trip_revert_ec(request: Request, trip_id: int):
     return Response(status_code=200, headers={"HX-Refresh": "true"})
 
 
+@app.post("/api/trips/{trip_id}/note", response_class=HTMLResponse)
+async def set_trip_note(request: Request, trip_id: int):
+    """#107: save the trip's user note + manual driving tags (drive mode, One-Pedal). Returns a
+    small 'saved' confirmation that HTMX drops next to the button. Driving tags are manual because
+    the Leapmotor cloud doesn't expose drive mode or One-Pedal (verified on-car)."""
+    form = await request.form()
+    note = form.get("note") or ""
+    drive_mode = (form.get("drive_mode") or "").strip().lower() or None
+    op_raw = (form.get("one_pedal") or "").strip()
+    one_pedal = int(op_raw) if op_raw in ("0", "1") else None
+    db_reader.save_trip_note(trip_id, note, drive_mode=drive_mode, one_pedal=one_pedal)
+    return HTMLResponse("✓ " + i18n.get_t(db_reader.get_language())("note_saved"))
+
+
 @app.delete("/api/charges/{charge_id}")
 async def delete_charge(request: Request, charge_id: int):
     """Permanently delete one charge session (HTMX, confirmed in the UI). Reloads the charges list,
@@ -474,6 +488,15 @@ async def delete_charge(request: Request, charge_id: int):
     db_reader.delete_charge(charge_id)
     base = request.headers.get("x-ingress-path", "")
     return Response(status_code=200, headers={"HX-Redirect": f"{base}/charges"})
+
+
+@app.post("/api/charges/{charge_id}/note", response_class=HTMLResponse)
+async def set_charge_note(request: Request, charge_id: int):
+    """#107: save the charge's optional user note (station location, shade, reliability, weather…).
+    Returns a small 'saved' confirmation that HTMX drops next to the button."""
+    form = await request.form()
+    db_reader.save_charge_note(charge_id, form.get("note") or "")
+    return HTMLResponse("✓ " + i18n.get_t(db_reader.get_language())("note_saved"))
 
 
 @app.get("/charges", response_class=HTMLResponse)
@@ -915,8 +938,14 @@ async def prepare_car_page(request: Request):
     """One-touch vehicle preparation (cmd 360 immediate / 361 schedule). Mirrors the official app:
     bundle A/C + seats + steering + mirror + destination, run now or on a schedule. B10/C10 only."""
     vehicle, _ = db_reader.get_vehicle()
+    ready_cfg = db_reader.get_ready_automation_config()
+    wins_stops = _wins_stops()
     return templates.TemplateResponse(request, "prepare_car.html", _ctx(
         page="prepare_car", vehicle=vehicle,
+        ready_cfg=ready_cfg, wins_stops=wins_stops,
+        # Slider INDEX for the saved windows_pct — same nearest-stop snap the Comandi page uses,
+        # so a value saved before the car's stop table changed still lands somewhere sane.
+        ready_wins_idx=_wins_idx(wins_stops, ready_cfg["windows_pct"] or 0),
     ))
 
 
@@ -3023,6 +3052,16 @@ async def prepare_car_off_api(request: Request):
     if ok:
         return HTMLResponse(f'<span style="color:#22c55e">✓ {t("prep_off_done")}</span>')
     return HTMLResponse(_cmd_error_html(msg))
+
+
+@app.post("/api/prepare-car/ready-automation", response_class=HTMLResponse)
+async def save_ready_automation_api(request: Request):
+    """Save the Ready-triggered automation config — read by the POLLER every poll (not by this
+    process); nothing is actuated here, this only persists settings."""
+    form = await request.form()
+    db_reader.save_ready_automation_config(form)
+    t = i18n.get_t(db_reader.get_language())
+    return HTMLResponse(f'<span style="color:#22c55e">✓ {t("ready_saved")}</span>')
 
 
 _OPTIMISTIC = {

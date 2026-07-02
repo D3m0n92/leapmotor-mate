@@ -10,6 +10,7 @@ _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
 import abrp
 import energy_snapshots
+import ready_automation
 from client import (LeapmotorMateClient, set_charge_current_min, EmptyStatusError,
                     seed_coord_signs, get_coord_signs)
 from db import Database
@@ -527,6 +528,10 @@ def main():
             # Daily ledger of the official lifetime energy/mileage counters + getEC split
             # (silent phase-1 collector) — throttled to 24h, best-effort.
             energy_snapshots.maybe_sample(db, client, v.vin, api_lock=_API_LOCK)
+
+            # Ready-triggered "prepare now" automation — fires once per Ready OFF→ON edge,
+            # gated on the interior-temperature condition if configured. Best-effort.
+            ready_automation.maybe_trigger(db, client, data, api_lock=_API_LOCK)
 
             # ABRP live telemetry (opt-in, off by default)
             if db.get_setting("abrp_enabled") == "1":

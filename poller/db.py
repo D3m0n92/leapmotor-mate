@@ -117,7 +117,10 @@ CREATE TABLE IF NOT EXISTS trips (
     ec_other             REAL,
     ec_tried             INTEGER DEFAULT 0,       -- EC enrichment attempts (cloud aggregation lags a fresh trip)
     ec_stable            INTEGER DEFAULT 0,       -- 1 once the cloud EC stabilised (two equal reads) → stop re-fetching
-    merged_into_id       INTEGER DEFAULT NULL
+    merged_into_id       INTEGER DEFAULT NULL,
+    note                 TEXT,                    -- #107: optional free-text user note (traffic, weather, road…)
+    drive_mode           TEXT,                    -- #107: manual tag — 'comfort' / 'normal' / 'sport' (not in cloud)
+    one_pedal            INTEGER                  -- #107: manual tag — 1 on / 0 off / NULL not set (not in cloud)
 );
 
 CREATE TABLE IF NOT EXISTS trip_positions (
@@ -146,7 +149,8 @@ CREATE TABLE IF NOT EXISTS charges (
     max_power_kw     REAL,
     cost             REAL,
     ac_energy_kwh    REAL,         -- wallbox energy a HOME charge is billed on = sum of the counter's rises
-    wallbox_energy_start_kwh REAL  -- last wallbox counter reading seen (running baseline for that sum)
+    wallbox_energy_start_kwh REAL, -- last wallbox counter reading seen (running baseline for that sum)
+    note             TEXT          -- #107: optional free-text user note (location, shade, weather…)
 );
 
 CREATE TABLE IF NOT EXISTS maintenance_logs (
@@ -355,6 +359,10 @@ class Database:
         # feeds charge detection, costs or the HOME/AC/FAST/HPC location_type.
         if "location_name" not in ccols:
             self._conn.execute("ALTER TABLE charges ADD COLUMN location_name TEXT DEFAULT NULL")
+        # migration: #107 — optional free-text user note on a charge (station location, shade,
+        # reliability, parking, weather, personal remarks). Display/context only, never computed on.
+        if "note" not in ccols:
+            self._conn.execute("ALTER TABLE charges ADD COLUMN note TEXT")
         # migration: manual trip-merge link — a child trip points to the parent it was merged into
         tcols = {r[1] for r in self._conn.execute("PRAGMA table_info(trips)").fetchall()}
         if "merged_into_id" not in tcols:
@@ -365,6 +373,12 @@ class Database:
         for _c, _t in (("efficiency_soc", "REAL"), ("ec_kwh", "REAL"), ("ec_driving", "REAL"),
                        ("ec_ac", "REAL"), ("ec_other", "REAL"), ("ec_tried", "INTEGER DEFAULT 0"),
                        ("ec_stable", "INTEGER DEFAULT 0")):
+            if _c not in tcols:
+                self._conn.execute(f"ALTER TABLE trips ADD COLUMN {_c} {_t}")
+        # migration: #107 — per-trip user note + MANUAL driving tags. drive_mode/one_pedal are user-set
+        # because the Leapmotor cloud does not expose drive mode or One-Pedal (verified on-car); they
+        # explain consumption differences the raw data can't. Display/context only, never computed on.
+        for _c, _t in (("note", "TEXT"), ("drive_mode", "TEXT"), ("one_pedal", "INTEGER")):
             if _c not in tcols:
                 self._conn.execute(f"ALTER TABLE trips ADD COLUMN {_c} {_t}")
         self._conn.commit()

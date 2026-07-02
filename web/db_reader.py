@@ -401,6 +401,101 @@ def save_dynamic_price_entity_for(ctype: str, entity_id: str) -> None:
     set_setting("dynamic_price_entities", json.dumps(m))
 
 
+# ── Ready-triggered "prepare now" automation (design agreed 2026-07-02) ────────
+# One JSON setting, read every poll by poller/ready_automation.py (which re-sanitises
+# independently — defense in depth, same pattern already used for the per-type pricing
+# modes: a write-time and a read-time guard, neither trusting the other alone).
+_READY_PRESETS    = {"cool", "heat", "vent", "defrost", "none"}
+_READY_SEAT_MODES = {"off", "heat", "vent"}
+
+
+def get_ready_automation_config() -> dict:
+    """Sanitised config for the Prepara Veicolo page's automation section."""
+    try:
+        raw = json.loads(get_setting("ready_automation", "") or "{}")
+        if not isinstance(raw, dict):
+            raw = {}
+    except (ValueError, TypeError):
+        raw = {}
+    ac_preset = raw.get("ac_preset")
+    if ac_preset not in _READY_PRESETS:
+        ac_preset = None
+    try:
+        ac_temperature = int(float(raw.get("ac_temperature")))
+    except (TypeError, ValueError):
+        ac_temperature = 22
+    windows_pct = raw.get("windows_pct")
+    try:
+        windows_pct = None if windows_pct is None else max(0, min(int(windows_pct), 100))
+    except (TypeError, ValueError):
+        windows_pct = None
+
+    def _seat(key):
+        v = raw.get(key)
+        return v if v in _READY_SEAT_MODES else "off"
+
+    try:
+        temp_value = float(raw.get("temp_value"))
+    except (TypeError, ValueError):
+        temp_value = 25.0
+    return {
+        "enabled":         bool(raw.get("enabled")),
+        "temp_enabled":    bool(raw.get("temp_enabled")),
+        "temp_comparator": raw.get("temp_comparator") if raw.get("temp_comparator") in (">", "<") else ">",
+        "temp_value":      temp_value,
+        "ac_preset":       ac_preset or "off",   # "off" is a real <select> option, ac_preset=None isn't
+        "ac_temperature":  ac_temperature,
+        "windows_pct":     windows_pct,
+        "seat_driver":     _seat("seat_driver"),
+        "seat_copilot":    _seat("seat_copilot"),
+        "steering":        bool(raw.get("steering")),
+        "mirror":          bool(raw.get("mirror")),
+    }
+
+
+def save_ready_automation_config(form) -> None:
+    """Parse + sanitise the automation form (Werkzeug/Starlette FormData) and persist it as one
+    JSON setting. Mirrors _parse_prepare_form's field names (ac_mode/ac_temperature/seat_driver/
+    seat_copilot/steering/mirror — the shared bundle_fields() macro) plus the automation-only
+    fields (enabled/temp_*/windows_*)."""
+    ac_mode = (form.get("ac_mode") or "off").strip()
+    ac_preset = ac_mode if ac_mode in _READY_PRESETS else None
+    try:
+        ac_temperature = int(float(form.get("ac_temperature") or 22))
+    except (TypeError, ValueError):
+        ac_temperature = 22
+    windows_enabled = (form.get("windows_enabled") or "") in ("1", "on", "true", "True")
+    windows_pct = None
+    if windows_enabled:
+        try:
+            windows_pct = max(0, min(int(float(form.get("windows_pct") or 0)), 100))
+        except (TypeError, ValueError):
+            windows_pct = 0
+
+    def _seat(name):
+        v = form.get("seat_" + name) or "off"
+        return v if v in _READY_SEAT_MODES else "off"
+
+    try:
+        temp_value = float(form.get("temp_value") or 25)
+    except (TypeError, ValueError):
+        temp_value = 25.0
+    cfg = {
+        "enabled":         (form.get("ready_enabled") or "") in ("1", "on", "true", "True"),
+        "temp_enabled":    (form.get("temp_enabled") or "") in ("1", "on", "true", "True"),
+        "temp_comparator": form.get("temp_comparator") if form.get("temp_comparator") in (">", "<") else ">",
+        "temp_value":      round(temp_value, 1),
+        "ac_preset":       ac_preset,
+        "ac_temperature":  ac_temperature,
+        "windows_pct":     windows_pct,
+        "seat_driver":     _seat("driver"),
+        "seat_copilot":    _seat("copilot"),
+        "steering":        (form.get("steering") or "") in ("1", "on", "true", "True"),
+        "mirror":          (form.get("mirror") or "") in ("1", "on", "true", "True"),
+    }
+    set_setting("ready_automation", json.dumps(cfg))
+
+
 def save_cost_config(mode: str, method: str, bands: list) -> None:
     """Persist the Costs-page config. Bands are sanitised to {start,end,prices}."""
     mode   = mode   if mode   in ("flat", "tou", "dynamic") else "flat"
@@ -798,6 +893,33 @@ def get_labelled_locations() -> list[tuple]:
 def set_charge_location_name(charge_id: int, name: str) -> None:
     db = _conn_rw()
     db.execute("UPDATE charges SET location_name=? WHERE id=?", (name, charge_id))
+    db.commit()
+
+
+def save_charge_note(charge_id: int, note: str) -> None:
+    """#107: persist the optional free-text user note on a charge (empty string clears it)."""
+    note = (note or "").strip()[:1000]
+    db = _conn_rw()
+    db.execute("UPDATE charges SET note=? WHERE id=?", (note or None, charge_id))
+    db.commit()
+
+
+# #107: driving-mode tag values Mate accepts (manual — the cloud doesn't expose drive mode).
+DRIVE_MODES = ("comfort", "normal", "sport")
+
+
+def save_trip_note(trip_id: int, note: str,
+                   drive_mode: Optional[str] = None,
+                   one_pedal: Optional[int] = None) -> None:
+    """#107: persist the trip user note + manual driving tags. drive_mode is one of DRIVE_MODES
+    (anything else clears it); one_pedal is 1/0/None (None = not set). Empty note clears it.
+    Writes to the trip id as given — the detail page already resolves a merged child to its parent."""
+    note = (note or "").strip()[:1000]
+    dm = drive_mode if drive_mode in DRIVE_MODES else None
+    op = one_pedal if one_pedal in (0, 1) else None
+    db = _conn_rw()
+    db.execute("UPDATE trips SET note=?, drive_mode=?, one_pedal=? WHERE id=?",
+               (note or None, dm, op, trip_id))
     db.commit()
 
 
@@ -1813,6 +1935,13 @@ def get_trip_detail(trip_id: int) -> Optional[dict]:
                               if elapsed is not None else None)
     trip_d["started_at"] = _local_iso(trip_d.get("started_at"))
     trip_d["ended_at"] = _local_iso(trip_d.get("ended_at"))
+
+    # #107: per-trip user note + manual driving tags — read from the parent row (the detail page
+    # always shows the parent, so the note/tags saved against it are the ones edited here).
+    _tp = dict(trip)
+    trip_d["note"] = _tp.get("note")
+    trip_d["drive_mode"] = _tp.get("drive_mode")
+    trip_d["one_pedal"] = _tp.get("one_pedal")
 
     # Speed stats derived from the GPS track (speed_kmh per point).
     speeds = [p["speed_kmh"] for p in positions if p["speed_kmh"] is not None]

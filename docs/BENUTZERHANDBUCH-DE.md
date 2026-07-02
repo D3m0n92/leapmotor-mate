@@ -232,6 +232,11 @@ Verbrauch (kWh/100 km), zurückgewonnene Energie** beim Bremsen und die geschät
   Detail. Ältere Fahrten haben eine Schaltfläche **„Mit offiziellen Daten umwandeln“**. Wenn die Cloud die
   Daten einer Fahrt nicht hat (kommt vor, bei jedem vernetzten Auto), bleibt die **Schätzung** — kein
   Fehler. **Immer aktiv**, keine Einrichtung.
+- **Ihre Notiz + Fahr-Tags 🆕** (#107) — im Detail einer Fahrt können Sie eine **freie Notiz** (Verkehr,
+  Wetter, Streckentyp, jede Anmerkung) schreiben und den verwendeten **Fahrmodus** (Comfort / Normal /
+  Sport) sowie **One-Pedal** (ein/aus) angeben. Mate kann sie nicht vom Auto lesen — Leapmotor sendet sie
+  nicht an die Cloud — Sie tragen sie also von Hand ein; sie helfen zu erklären, warum zwei ähnliche
+  Fahrten unterschiedlich verbraucht haben.
 
 ### Karte
 **(Menü: Karte)** — Die Position des Autos auf der Karte. Sie zeigt die letzte bekannte Position; wenn das letzte
@@ -248,6 +253,9 @@ verschwinden zu lassen.
   **den tatsächlich gezahlten Gesamtbetrag von Hand eintragen**; dieser Wert überschreibt die automatische Schätzung.
 - Auch Ladungen, die stattgefunden haben, während das Auto ausgeschaltet/offline war, werden aus dem Sprung des
   Ladestands **rekonstruiert**.
+- **Ihre Notiz 🆕** (#107) — jede Ladung hat eine **freie Notiz** (direkt über *Ladung löschen*) für das,
+  was die Zahlen nicht erfassen: wo die Ladesäule stand, Schatten/Unterstand, ihre Zuverlässigkeit, die
+  Parkbedingungen, das Wetter, jede persönliche Anmerkung.
 
 ### Ladepreise
 **(Menü: Ladepreise)** — Hier legen Sie fest, **was Sie für die Energie zahlen**, damit Mate die Kosten berechnen
@@ -333,6 +341,23 @@ Befehl trotzdem durch (hängt vom Empfang/Standby des Autos ab).
 **(Menü: Fahrzeug vorbereiten)** — Die Funktion „**das Auto mit einem Tipp vorbereiten**": Sie bringt den
 Innenraum auf die gewünschte Temperatur (und verbundene Funktionen) **sofort** oder zu einer **geplanten Zeit**.
 Sie können auch alles ausschalten.
+
+**🆕 Automatisch beim Einschalten** — Statt jedes Mal die Taste zu drücken, können Sie Mate die
+Vorbereitung **von selbst ausführen lassen, sobald das Auto in den Ready-Zustand geht** (Einschalten).
+Aktivieren Sie **Automatisch beim Einschalten**, legen Sie einmal fest, was sie tun soll — Klima-Preset
+und Wunschtemperatur, wie weit die Fenster geöffnet werden, **Belüftung oder Heizung** der Sitze
+Fahrer/Beifahrer, Lenkrad- und Spiegelheizung — und speichern Sie.
+
+Sie können eine **optionale Bedingung für die Innentemperatur** hinzufügen: die Vorbereitung **nur
+ausführen, wenn der Innenraum über** einem Wert liegt (z. B. nur über 25 °C vorkühlen) **oder nur, wenn
+er unter** einem liegt (z. B. nur unter 5 °C vorheizen). **Lassen Sie die Bedingung aus, läuft sie bei
+jedem Einschalten**, unabhängig von der Temperatur. Zwei Dinge zur Bedingung: Sie betrachtet die
+**Innen**temperatur (das Auto liefert keine Außentemperatur) und wird **einmalig entschieden, im Moment
+des Einschaltens** — ändert sich der Innenraum später während der Fahrt, löst sie kein zweites Mal aus.
+
+Sie läuft **einmal pro Einschalten** (sie wiederholt sich nicht, solange Sie eingeschaltet bleiben, und
+auch nicht für eine spätere Fahrt in derselben Sitzung), ignoriert kurze Signalstörungen und löst nie
+erneut aus, nur weil Mate neu gestartet ist.
 
 ### Navigation
 **(Menü: Navigation)** — *Sendet ein Ziel an die Navigation des Autos* und **findet die Ladestationen in der

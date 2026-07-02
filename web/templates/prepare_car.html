@@ -168,6 +168,171 @@
 
 </div>
 
+<!-- Ready-triggered automation: fires the same bundle automatically the moment the car goes READY. -->
+<div class="card mt-5">
+  <div class="flex items-center gap-2 mb-1">
+    {{ ico.mdi('thermometer', 'w-6 h-6 text-violet-400') }}
+    <span class="font-semibold text-white">{{ t('ready_title') }}</span>
+  </div>
+  <div class="text-xs text-slate-500 mb-3">{{ t('ready_desc') }}</div>
+
+  <form id="ready-form" hx-post="api/prepare-car/ready-automation" hx-target="#ready-result" hx-swap="innerHTML" class="space-y-4">
+    <!-- Master switch -->
+    <label class="relative cursor-pointer inline-block">
+      <input type="checkbox" name="ready_enabled" value="1" class="peer sr-only" onchange="readySyncUI()">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                   peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+        {{ ico.mdi('lightning-bolt', 'w-4 h-4') }}{{ t('ready_enable') }}
+      </span>
+    </label>
+
+    <div id="ready-body" class="space-y-4 pl-1 border-l-2 border-slate-800">
+      <div class="pl-3 space-y-4">
+
+        <!-- Optional interior-temperature condition -->
+        <div>
+          <label class="relative cursor-pointer inline-block mb-2">
+            <input type="checkbox" name="temp_enabled" value="1" class="peer sr-only" onchange="readySyncUI()">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                         peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+              {{ ico.mdi('thermometer', 'w-4 h-4') }}{{ t('ready_temp_gate') }}
+            </span>
+          </label>
+          <div id="ready-temp-fields" class="flex items-center gap-2 flex-wrap">
+            {{ ico.mdi('thermometer', 'w-4 h-4 text-slate-500') }}
+            <span class="text-xs text-slate-400">{{ t('ready_temp_inside') }}</span>
+            <select name="temp_comparator" class="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-brand">
+              <option value=">">&gt; ({{ t('ready_above') }})</option>
+              <option value="<">&lt; ({{ t('ready_below') }})</option>
+            </select>
+            <input type="number" name="temp_value" step="1" value="25"
+                   class="w-20 bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-2 py-1.5 text-right focus:outline-none focus:border-brand">
+            <span class="text-slate-400 text-sm">°C</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1.5">{{ t('ready_temp_hint') }}</p>
+        </div>
+
+        {# A/C — same field names/values as bundle_fields()'s own AC block (hand-duplicated, not
+           macro-shared: the macro's seat section below is intentionally DIFFERENT here — two
+           independent slides, not the shared per-seat off/heat/vent picker — so pulling the
+           whole macro in would mean fighting half of it). #}
+        <div>
+          <span class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">{{ ico.mdi('air-conditioner', 'w-4 h-4 text-sky-400') }}{{ t('prep_ac') }}</span>
+          <div class="flex flex-wrap gap-1.5">
+            {% set _acmodes = [('off','',t('prep_off')),('cool','snowflake',t('sched_clima_cool')),('heat','heat-wave',t('sched_clima_heat')),('vent','fan',t('sched_clima_vent')),('defrost','car-defrost-front',t('sched_clima_defrost')),('none','air-conditioner',t('sched_clima_none'))] %}
+            {% for val, icon, label in _acmodes %}
+            <label class="relative cursor-pointer">
+              <input type="radio" name="ac_mode" value="{{ val }}" class="peer sr-only"{% if val == 'off' %} checked{% endif %}>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                           peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+                {% if icon %}{{ ico.mdi(icon, 'w-4 h-4') }}{% endif %}{{ label }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="flex items-center gap-1.5 text-xs text-slate-400 mt-2">
+            {{ t('sched_temp') }}
+            <input type="range" name="ac_temperature" min="16" max="32" step="1" value="22"
+                   class="accent-brand cursor-pointer" oninput="this.nextElementSibling.textContent=this.value+'°C'">
+            <span class="text-slate-200 font-semibold">22°C</span>
+          </div>
+        </div>
+
+        {# Seats — TWO independent slides PER SEAT (Silvio: driver and copilot must be
+           independently controllable, matching how "Prepara ora"'s own per-seat picker already
+           works — NOT one switch driving both seats together, which was my own uncontested
+           simplification and wrong). Ventila/Riscalda stay mutually exclusive WITHIN each seat
+           (readySeatChanged(seat, which)) — a seat can't be both — but driver and copilot no
+           longer move together. Only driver/copilot are wired: left_rear/right_rear are accepted
+           by build_prepare_bundle's payload shape but have no capability_profile entry, no live
+           single-seat command support, and no confirmed on-car rear heat/vent hardware — not
+           exposed here until that's verified empirically (Silvio's own rule). #}
+        <div>
+          <span class="text-xs text-slate-400 mb-1 flex items-center gap-1.5">{{ ico.mdi('car-seat', 'w-4 h-4 text-slate-400') }}{{ t('prep_seats') }}</span>
+          {# flex, not grid-cols-2: a grid would stretch each seat to half this wide card's
+             width, leaving a big gap between two narrow button groups (Silvio: "troppo
+             distanti"). flex sizes each group to its own content instead. #}
+          <div class="flex flex-wrap gap-x-8 gap-y-3">
+            {% for seat, lbl in [('driver', t('prep_seat_driver')), ('copilot', t('prep_seat_passenger'))] %}
+            <div>
+              <span class="text-[11px] text-slate-500 mb-1 block">{{ lbl }}</span>
+              <div class="flex flex-wrap gap-1.5">
+                <label class="relative cursor-pointer">
+                  <input type="checkbox" id="ready-seat-{{ seat }}-vent" class="peer sr-only" onchange="readySeatChanged('{{ seat }}','vent')">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                               peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+                    {{ ico.mdi('car-seat-cooler', 'w-4 h-4') }}{{ t('prep_seat_vent') }}
+                  </span>
+                </label>
+                <label class="relative cursor-pointer">
+                  <input type="checkbox" id="ready-seat-{{ seat }}-heat" class="peer sr-only" onchange="readySeatChanged('{{ seat }}','heat')">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                               peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+                    {{ ico.mdi('car-seat-heater', 'w-4 h-4') }}{{ t('prep_seat_heat') }}
+                  </span>
+                </label>
+              </div>
+              <input type="hidden" name="seat_{{ seat }}" id="ready-seat-{{ seat }}" value="off">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Steering + mirror — same field names/values as bundle_fields()'s own block. #}
+        <div class="flex flex-wrap gap-1.5">
+          <label class="relative cursor-pointer">
+            <input type="checkbox" name="steering" value="1" class="peer sr-only">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                         peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+              {{ ico.mdi('steering', 'w-4 h-4') }}{{ t('prep_steering') }}
+            </span>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="checkbox" name="mirror" value="1" class="peer sr-only">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                         peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+              {{ ico.mdi('mirror-rectangle', 'w-4 h-4') }}{{ t('prep_mirror') }}
+            </span>
+          </label>
+        </div>
+
+        <!-- Windows -->
+        <div>
+          <label class="relative cursor-pointer inline-block mb-2">
+            <input type="checkbox" name="windows_enabled" value="1" class="peer sr-only" onchange="readySyncUI()">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-600 text-slate-400
+                         peer-checked:bg-brand/20 peer-checked:border-brand peer-checked:text-white transition-colors">
+              {{ ico.mdi('car-convertible', 'w-4 h-4') }}{{ t('ready_windows') }}
+            </span>
+          </label>
+          {# Index-based slider snapping to the stops THIS car actually actuates — same control,
+             same reasoning as Comandi/cmd_grid.html (B10/C10/B05 ignore everything except
+             0/20/50/100%, #62; a free 0-100 slider let you "choose" a value the car ignores).
+             The slider only carries the INDEX; `windows_pct` (submitted) is the real % looked up
+             from WINS_STOPS, kept in sync by winsIdxChanged() below. #}
+          <div id="ready-windows-fields" class="flex items-center gap-2">
+            <input type="range" id="ready-wins-idx" min="0" max="{{ (wins_stops | length) - 1 }}" step="1"
+                   value="{{ ready_wins_idx }}" class="accent-brand cursor-pointer" oninput="winsIdxChanged(this.value)">
+            <span id="ready-wins-label" class="text-slate-200 font-semibold text-sm w-10">{{ wins_stops[ready_wins_idx] }}%</span>
+            <input type="hidden" name="windows_pct" id="ready-wins-pct" value="{{ wins_stops[ready_wins_idx] }}">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 pt-1">
+      <button type="submit" class="px-4 py-2 rounded-lg bg-brand text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition">{{ t('ready_save') }}</button>
+      <span id="ready-result" class="text-sm font-medium"></span>
+    </div>
+  </form>
+
+  <div class="flex items-start gap-2 mt-3 text-xs text-amber-200/90 bg-amber-400/10 border border-amber-400/25 rounded-lg px-3 py-2">
+    {{ ico.mdi('information-outline', 'w-4 h-4 shrink-0 mt-0.5 text-amber-300') }}
+    <span>{{ t('ready_hint') }}</span>
+  </div>
+</div>
+
 <script>
 // Lock the A/C temperature for cool/heat (18/32) like the climate page; free for vent/defrost/auto/off.
 (function () {
@@ -250,5 +415,75 @@ function prepCancelEdit() {
 }
 // After a confirmed save/delete, return the form to "add new" mode.
 document.body.addEventListener('prepareCarSaved', function () { setTimeout(prepCancelEdit, 50); });
+
+// ── Ready-triggered automation ──────────────────────────────────────────────
+// Seats: two independent slides PER SEAT (driver and copilot no longer move together — Silvio's
+// correction). Vent/heat stay mutually exclusive WITHIN one seat only (checking one unchecks the
+// other FOR THAT SEAT); the seat's own hidden field tracks whichever is on, or 'off' if neither.
+function readySeatChanged(seat, which) {
+  var vent = document.getElementById('ready-seat-' + seat + '-vent');
+  var heat = document.getElementById('ready-seat-' + seat + '-heat');
+  if (which === 'vent' && vent.checked) heat.checked = false;
+  if (which === 'heat' && heat.checked) vent.checked = false;
+  var val = vent.checked ? 'vent' : (heat.checked ? 'heat' : 'off');
+  document.getElementById('ready-seat-' + seat).value = val;
+}
+
+// Windows: index-based slider, same WINS_STOPS vocabulary as Comandi — this car only actuates
+// these stops (#62), so the slider can't land anywhere else. Keeps the visible label AND the
+// hidden windows_pct (what actually gets saved) in sync with the slider's index.
+var READY_WINS_STOPS = {{ wins_stops | tojson }};
+function winsIdxChanged(idx) {
+  var pct = READY_WINS_STOPS[idx];
+  document.getElementById('ready-wins-label').textContent = pct + '%';
+  document.getElementById('ready-wins-pct').value = pct;
+}
+
+// Show/hide the body under the master switch, and the temp-condition / windows sub-fields
+// under their own switches — same collapse pattern as the temp-lock above, just three of them.
+function readySyncUI() {
+  var form = document.getElementById('ready-form');
+  if (!form) return;
+  var on = form.querySelector('input[name="ready_enabled"]').checked;
+  document.getElementById('ready-body').classList.toggle('opacity-40', !on);
+  document.getElementById('ready-body').classList.toggle('pointer-events-none', !on);
+  var tempOn = form.querySelector('input[name="temp_enabled"]').checked;
+  document.getElementById('ready-temp-fields').classList.toggle('hidden', !tempOn);
+  var winOn = form.querySelector('input[name="windows_enabled"]').checked;
+  document.getElementById('ready-windows-fields').classList.toggle('hidden', !winOn);
+}
+
+// Prefill the form from the saved config on load — same technique as prepEdit() above
+// (_prepSetRadio reused as-is), just reading the SIMPLE {ac_preset, seat_driver, seat_copilot}
+// vocabulary directly (this config already speaks it — no cloud-shape translation needed).
+(function () {
+  var cfg = {{ ready_cfg | tojson }};
+  var form = document.getElementById('ready-form');
+  if (!form || !cfg) return;
+  form.querySelector('input[name="ready_enabled"]').checked = !!cfg.enabled;
+  form.querySelector('input[name="temp_enabled"]').checked = !!cfg.temp_enabled;
+  form.querySelector('select[name="temp_comparator"]').value = cfg.temp_comparator || '>';
+  form.querySelector('input[name="temp_value"]').value = cfg.temp_value;
+  _prepSetRadio(form, 'ac_mode', cfg.ac_preset || 'off');
+  var acTemp = form.querySelector('input[name="ac_temperature"]');
+  if (acTemp) acTemp.value = cfg.ac_temperature;
+  // Two independent slides PER SEAT — driver and copilot prefilled separately.
+  ['driver', 'copilot'].forEach(function (seat) {
+    var val = cfg['seat_' + seat] || 'off';
+    document.getElementById('ready-seat-' + seat + '-vent').checked = (val === 'vent');
+    document.getElementById('ready-seat-' + seat + '-heat').checked = (val === 'heat');
+    document.getElementById('ready-seat-' + seat).value = val;
+  });
+  form.querySelector('input[name="steering"]').checked = !!cfg.steering;
+  form.querySelector('input[name="mirror"]').checked = !!cfg.mirror;
+  var winOn = cfg.windows_pct !== null && cfg.windows_pct !== undefined;
+  form.querySelector('input[name="windows_enabled"]').checked = winOn;
+  // The index slider is already server-rendered at the right position (ready_wins_idx) —
+  // just resync the label + hidden field to match it.
+  winsIdxChanged(document.getElementById('ready-wins-idx').value);
+  var acr = form.querySelector('input[name="ac_mode"]:checked');
+  if (acr) acr.dispatchEvent(new Event('change', { bubbles: true }));   // re-apply temp lock
+  readySyncUI();
+})();
 </script>
 {% endblock %}

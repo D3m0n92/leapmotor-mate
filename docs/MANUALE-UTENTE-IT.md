@@ -237,6 +237,11 @@ Più in basso trovi mini-statistiche e un **indicatore di "reattività auto"** (
     ad auto accesa prima di partire. Se **non spegni mai l'auto tra due viaggi** (ti fermi, resti in P,
     riparti), il cloud li conta come **un'unica** sessione — Mate ti avvisa di **unire i due viaggi** per
     avere il consumo reale combinato.
+- **La tua nota + tag di guida 🆕** (#107) — nel dettaglio di un viaggio puoi scrivere una **nota libera**
+  (traffico, meteo, tipo di strada, qualsiasi appunto) e indicare la **modalità di guida** (Comfort /
+  Normale / Sport) e il **One-Pedal** (attivo/disattivo) usati. Mate non può leggerli dall'auto —
+  Leapmotor non li manda al cloud — quindi li imposti a mano; aiutano a spiegare perché due guidate
+  simili hanno consumato in modo diverso.
 
 ### Mappa
 **(menu: Mappa)** — La posizione dell'auto su mappa. Mostra l'ultima posizione nota; se l'ultimo
@@ -254,6 +259,9 @@ un'etichetta:
   puoi **scrivere a mano il totale realmente pagato**; questo valore scavalca la stima automatica.
 - Anche le ricariche avvenute mentre l'auto era spenta/offline vengono **ricostruite** dal salto di
   percentuale di carica.
+- **La tua nota 🆕** (#107) — ogni ricarica ha una **nota libera** (subito sopra *Elimina ricarica*) per
+  ciò che i numeri non catturano: dov'era la colonnina, ombra/riparo, quanto è affidabile, le condizioni
+  del parcheggio, il meteo, qualsiasi appunto personale.
 
 ### Prezzi di ricarica
 **(menu: Prezzi di ricarica)** — Qui imposti **quanto paghi l'energia**, così Mate può calcolare i
@@ -343,6 +351,23 @@ fine (dipende da copertura/standby dell'auto).
 **(menu: Preparazione veicolo)** — La funzione "**prepara l'auto con un tocco**": porta l'abitacolo
 alla temperatura desiderata (e funzioni collegate) **subito** oppure a un **orario programmato**.
 Puoi anche spegnere tutto.
+
+**🆕 Automazione all'accensione** — Invece di premere il pulsante ogni volta, puoi far eseguire a Mate
+la preparazione **da sola nel momento in cui l'auto va in Ready** (accensione). Attiva **Automazione
+all'accensione**, scegli una volta cosa deve fare — preset del clima e temperatura desiderata, quanto
+aprire i finestrini, **ventilazione o riscaldamento** dei sedili guidatore/passeggero, riscaldamento di
+volante e specchietti — e salva.
+
+Puoi aggiungere una **condizione opzionale sulla temperatura interna**: esegui la preparazione **solo se
+l'abitacolo è superiore a** un valore (es. pre-raffresca solo se supera i 25 °C) **oppure solo se è
+inferiore a** uno (es. pre-riscalda solo se è sotto i 5 °C). **Lascia la condizione disattivata e parte a
+ogni accensione**, qualunque sia la temperatura. Due cose da sapere sulla condizione: guarda la
+temperatura **interna** (l'auto non fornisce quella esterna) ed è decisa **una sola volta, nell'istante
+in cui accendi l'auto** — quindi se l'abitacolo cambia più tardi durante la guida, non riparte una
+seconda volta.
+
+Parte **una volta per accensione** (non si ripete finché resti acceso, né per un viaggio successivo nella
+stessa sessione), ignora i brevi disturbi del segnale e non riparte solo perché Mate si è riavviato.
 
 ### Navigazione
 **(menu: Navigazione)** — *Invia una destinazione al navigatore dell'auto* e **trova le colonnine
